@@ -36,7 +36,6 @@ dependencies {
 }
 
 group = 'shortestpath'
-version = '1.19.0'
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
