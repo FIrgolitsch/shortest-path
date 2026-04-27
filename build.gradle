@@ -51,8 +51,6 @@ tasks.withType(Checkstyle).configureEach {
 
 test {
     jvmArgs = ['-Xms1g', '-Xmx8g']
-    exclude 'shortestpath/dump/**'
-    exclude 'shortestpath/dashboard/DashboardTest.class'
 }
 
 jacoco {
@@ -99,7 +97,5 @@ tasks.register('shadowJar', Jar) {
     archiveFileName.set("${rootProject.name}-${project.version}-all.jar")
 }
 
-apply from: 'gradle/dashboards.gradle'
-apply from: 'gradle/cache-dumpers.gradle'
 
 

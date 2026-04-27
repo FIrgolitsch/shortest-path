@@ -27,33 +27,7 @@ Pass additional arguments when needed:
 python3 scripts/dump_transport_coordinates.py --pretty --output build/transport-coordinates.json
 ```
 
-## Dashboard
-The repo also includes a developer dashboard for inspecting pathfinder scenarios and reachability datasets visually.
+## Developer tooling
 
-Build the shared dashboard site with:
-
-```bash
-./gradlew dashboardSite
-python -m http.server --directory build/reports/pathfinder-dashboard 8000
-```
-
-Then open `http://localhost:8000`.
-
-The published dashboard is also available on GitHub Pages for this repo:
-
-`https://skretzo.github.io/shortest-path/`
-t
-You can use the dashboard to inspect:
-
-- rendered routes for scenario and dataset runs
-- transport overlays, including entry points, exit points, and teleports
-- where banked state begins on a route
-
-For a lightweight regression workflow, add a reported destination to
-`src/test/resources/reachability/targets.csv` and run:
-
-```bash
-./gradlew targetsDashboard
-```
-
-For the current bundles and when to use each dataset, see [docs/dashboard-design.md](docs/dashboard-design.md).
+Developer dashboards and OSRS cache dumpers live in [shortest-path-tooling](https://github.com/FIrgolitsch/shortest-path-tooling).
+The published dashboard is available on GitHub Pages: `https://skretzo.github.io/shortest-path/`
