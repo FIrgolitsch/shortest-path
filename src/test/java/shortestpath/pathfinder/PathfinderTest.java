@@ -2033,4 +2033,39 @@ public class PathfinderTest
 			withHighPrayer >= withLowPrayer);
 	}
 
+
+	@Test
+	public void diagFairyRingPick()
+	{
+		when(config.useFairyRings()).thenReturn(true);
+		setupInventory();
+		setupEquipment(new Item(ItemID.DRAMEN_STAFF, 1));
+		when(client.getVarbitValue(VarbitID.FAIRY2_QUEENCURE_QUEST)).thenReturn(100);
+		setupConfig(QuestState.FINISHED, 99, TeleportationItem.NONE);
+
+		Transport t = findSampleTransport(TransportType.FAIRY_RING);
+		int ox = WorldPointUtil.unpackWorldX(t.getOrigin());
+		int oy = WorldPointUtil.unpackWorldY(t.getOrigin());
+		int dx = WorldPointUtil.unpackWorldX(t.getDestination());
+		int dy = WorldPointUtil.unpackWorldY(t.getDestination());
+		System.out.println("DIAG pick origin=(" + ox + "," + oy + ") dest=(" + dx + "," + dy + ")"
+			+ " destPoh=" + ShortestPathPlugin.isInsidePoh(dx, dy)
+			+ " originPoh=" + ShortestPathPlugin.isInsidePoh(ox, oy));
+
+		Transport[] usable = pathfinderConfig.getTransportsPacked(false)
+			.getOrDefault(t.getOrigin(), new Transport[0]);
+		boolean found = false;
+		for (Transport u : usable)
+		{
+			if (u.getDestination() == t.getDestination())
+			{
+				found = true;
+			}
+		}
+		System.out.println("DIAG usableCount=" + usable.length + " pickInUsable=" + found);
+
+		Pathfinder pf = runPathfinder(t.getOrigin(), t.getDestination());
+		System.out.println("DIAG pathLen=" + pf.getPath().size()
+			+ " term=" + (pf.getResult() != null ? pf.getResult().getTerminationReason() : "null"));
+	}
 }
