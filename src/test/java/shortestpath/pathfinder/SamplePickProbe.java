@@ -1,6 +1,5 @@
 package shortestpath.pathfinder;
 
-import java.lang.reflect.Field;
 import java.util.Map;
 import java.util.Set;
 import net.runelite.api.Client;
@@ -21,10 +20,12 @@ import static org.mockito.Mockito.when;
 import org.mockito.junit.MockitoJUnitRunner;
 import shortestpath.PrimitiveIntHashMap;
 import shortestpath.ShortestPathConfig;
+import shortestpath.ShortestPathPlugin;
 import shortestpath.TeleportationItem;
 import shortestpath.transport.Transport;
 import shortestpath.transport.TransportLoader;
 import shortestpath.transport.TransportType;
+import shortestpath.WorldPointUtil;
 
 @RunWith(MockitoJUnitRunner.class)
 public class SamplePickProbe
@@ -36,10 +37,8 @@ public class SamplePickProbe
 	@Mock ItemContainer bank;
 	@Mock ShortestPathConfig config;
 
-	@Test
-	public void probeFairyRingUsability() throws Exception
+	private void setup()
 	{
-		// Replicate testFairyRingsUsedWithDramenStaffWornInHand setup
 		when(config.calculationCutoff()).thenReturn(30);
 		when(config.currencyThreshold()).thenReturn(10000000);
 		when(config.useFairyRings()).thenReturn(true);
@@ -48,49 +47,47 @@ public class SamplePickProbe
 		doReturn(equipment).when(client).getItemContainer(InventoryID.WORN);
 		doReturn(new Item[]{new Item(ItemID.DRAMEN_STAFF, 1)}).when(equipment).getItems();
 		when(client.getVarbitValue(VarbitID.FAIRY2_QUEENCURE_QUEST)).thenReturn(100);
-
-		TestPathfinderConfig pfc = new TestPathfinderConfig(client, config, QuestState.FINISHED, true, true);
 		when(client.getGameState()).thenReturn(GameState.LOGGED_IN);
 		when(client.getClientThread()).thenReturn(Thread.currentThread());
 		when(client.getBoostedSkillLevel(any(Skill.class))).thenReturn(99);
 		when(config.useTeleportationItems()).thenReturn(TeleportationItem.NONE);
+	}
+
+	@Test
+	public void probeAllFirstBucketRings()
+	{
+		TestPathfinderConfig pfc = new TestPathfinderConfig(client, config, QuestState.FINISHED, true, true);
+		setup();
 		pfc.refresh();
 
-		// Find the sample like findSampleTransport does
-		Transport sample = null;
+		PrimitiveIntHashMap<Transport[]> packed = pfc.getTransportsPacked(false);
+
+		// first bucket containing a fairy ring — same as findSampleTransport scan
+		int bucketIdx = -1;
+		Set<Transport> bucket = null;
 		for (int origin : transports.keySet())
 		{
+			boolean has = false;
 			for (Transport t : transports.get(origin))
-			{
-				if (TransportType.FAIRY_RING.equals(t.getType()) && !shortestpath.ShortestPathPlugin.isInsidePoh(
-					t.getOrigin() >> 14 & 0x3FFF, t.getOrigin() & 0x3FFF))
-				{
-					sample = t;
-					break;
-				}
-			}
-			if (sample != null) break;
+				if (TransportType.FAIRY_RING.equals(t.getType())
+					&& !ShortestPathPlugin.isInsidePoh(WorldPointUtil.unpackWorldX(t.getOrigin()), WorldPointUtil.unpackWorldY(t.getOrigin())))
+					has = true;
+			if (has) { bucketIdx = origin; bucket = transports.get(origin); break; }
 		}
-		System.out.println("PROBE sample=" + sample);
+		System.out.println("PROBE firstBucketOrigin=" + WorldPointUtil.unpackWorldX(bucketIdx) + "," + WorldPointUtil.unpackWorldY(bucketIdx));
 
-		// Is it in the usable maps?
-		PrimitiveIntHashMap<Transport[]> packed = pfc.getTransportsPacked(false);
-		Transport[] atOrigin = packed.get(sample.getOrigin());
-		System.out.println("PROBE packedAtOrigin=" + java.util.Arrays.toString(atOrigin));
-
-		// Dump private state
-		Field vb = PathfinderConfig.class.getDeclaredField("varbitValues");
-		vb.setAccessible(true);
-		Map<Integer, Integer> varbitValues = (Map<Integer, Integer>) vb.get(pfc);
-		System.out.println("PROBE varbit4498=" + varbitValues.get(4498) + " varbitValuesSize=" + varbitValues.size());
-
-		Field iq = PathfinderConfig.class.getDeclaredField("itemsAndQuantities");
-		iq.setAccessible(true);
-		// call hasRequiredItems indirectly: check if any fairy ring at all is usable
-		int usableRings = 0;
-		for (int o : packed.keys())
-			for (Transport t : packed.get(o))
-				if (TransportType.FAIRY_RING.equals(t.getType())) usableRings++;
-		System.out.println("PROBE usableRings=" + usableRings + " packedKeys=" + packed.size());
+		for (Transport t : bucket)
+		{
+			if (!TransportType.FAIRY_RING.equals(t.getType())) continue;
+			if (ShortestPathPlugin.isInsidePoh(WorldPointUtil.unpackWorldX(t.getOrigin()), WorldPointUtil.unpackWorldY(t.getOrigin()))) continue;
+			Transport[] usable = packed.getOrDefault(t.getOrigin(), new Transport[0]);
+			boolean inUsable = false;
+			for (Transport u : usable) if (u == t) inUsable = true;
+			Pathfinder pf = new Pathfinder(pfc, t.getOrigin(), Set.of(t.getDestination()));
+			pf.run();
+			System.out.println("PROBE ring dest=" + WorldPointUtil.unpackWorldX(t.getDestination()) + "," + WorldPointUtil.unpackWorldY(t.getDestination())
+				+ " usable=" + inUsable + " pathLen=" + pf.getPath().size()
+				+ " term=" + (pf.getResult() != null ? pf.getResult().getTerminationReason() : "null"));
+		}
 	}
 }
