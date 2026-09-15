@@ -1744,6 +1744,13 @@ public class PathfinderTest
 					{
 						continue;
 					}
+					System.out.println("DIAGPICK " + transportType + " origin=(" + originX + "," + originY + ")"
+						+ " dest=(" + WorldPointUtil.unpackWorldX(transport.getDestination()) + ","
+						+ WorldPointUtil.unpackWorldY(transport.getDestination()) + ")"
+						+ " destPoh=" + ShortestPathPlugin.isInsidePoh(
+							WorldPointUtil.unpackWorldX(transport.getDestination()),
+							WorldPointUtil.unpackWorldY(transport.getDestination()))
+						+ " originUndef=" + (transport.getOrigin() == Transport.UNDEFINED_ORIGIN));
 					return transport;
 				}
 			}
