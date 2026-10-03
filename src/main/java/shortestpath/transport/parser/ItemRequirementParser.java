@@ -20,7 +20,7 @@ import shortestpath.transport.requirement.TransportItems;
  * Example: {@code AIR_RUNE=3&FIRE_RUNE=2} (need both)
  * </p>
  * <p>
- * Example: {@code DRAMEN_STAFF=1|LUNAR_STAFF=1} (need either)
+ * Example: {@code AIR_RUNE=1|WATER_RUNE=1} (need either)
  * </p>
  * <p>
  * Each OR alternative keeps its own quantity, for example
