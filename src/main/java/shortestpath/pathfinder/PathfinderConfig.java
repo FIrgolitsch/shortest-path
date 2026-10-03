@@ -5,6 +5,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -138,6 +139,16 @@ public class PathfinderConfig
 	 */
 	private TransportEligibility eligibility;
 	private boolean eligibilityStale = true;
+	/**
+	 * Transports the post-search consumption validator excluded for the current
+	 * search context. Exclusions deliberately survive {@link #refresh()} — they
+	 * exist for the re-plan's rebuild; callers clear them when the search context
+	 * (start or targets) changes. Transports are interned, so identity semantics
+	 * apply; the set is synchronised because exclusion happens on the pathfinder
+	 * worker thread while {@link #useTransport} reads it on the client thread.
+	 */
+	private final Set<Transport> excludedTransports =
+		Collections.synchronizedSet(Collections.newSetFromMap(new IdentityHashMap<>()));
 	/**
 	 * Reference that points to either allDestinations or filteredDestinations
 	 */
@@ -736,6 +747,13 @@ public class PathfinderConfig
 
 	private boolean useTransport(Transport transport, long evaluationTimeMinutes)
 	{
+		// Consumption-validator exclusions win over every other rule for this
+		// search context.
+		if (excludedTransports.contains(transport))
+		{
+			return false;
+		}
+
 		// Sailing: suppress teleports while the player is aboard a boat.
 		// We don't model sailing navigation, so teleporting away mid-ocean would produce
 		// confusing suggestions. Pathfinding resumes normally after disembarking.
@@ -1147,6 +1165,26 @@ public class PathfinderConfig
 	public void invalidateEligibility()
 	{
 		eligibilityStale = true;
+	}
+
+	/**
+	 * Excludes a transport from this config's availability for the current search
+	 * context — used by the post-search consumption validator to force a re-plan
+	 * around a transport earlier consumption has made unpayable.
+	 */
+	public void excludeTransport(Transport transport)
+	{
+		excludedTransports.add(transport);
+	}
+
+	/**
+	 * Drops all validator exclusions; called when the search context (start or
+	 * targets) changes, because the exclusion set only makes sense for the search
+	 * that produced it.
+	 */
+	public void clearExcludedTransports()
+	{
+		excludedTransports.clear();
 	}
 
 	/**
