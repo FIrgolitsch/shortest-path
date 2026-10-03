@@ -111,7 +111,7 @@ public class InventoryHighlightOverlay extends AbstractHighlightOverlay
 
 		ItemContainer wornContainer = client.getItemContainer(InventoryID.WORN);
 		Set<Integer> equippedItemIds = new HashSet<>();
-		if (wornContainer != null)
+		if (wornContainer != null && wornContainer.getItems() != null)
 		{
 			for (Item item : wornContainer.getItems())
 			{

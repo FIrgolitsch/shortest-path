@@ -7,7 +7,6 @@ import java.util.Map;
 import java.util.Set;
 import shortestpath.ItemVariations;
 import shortestpath.TeleportationItem;
-import shortestpath.pathfinder.PathfinderConfig;
 import shortestpath.transport.requirement.ItemRequirement;
 import shortestpath.transport.requirement.TransportItems;
 
@@ -128,14 +127,14 @@ public final class TransportEligibility
 
 		// Fairy rings require Dramen/Lunar staff unless the Lumbridge Elite diary is complete
 		if (TransportType.FAIRY_RING.equals(transport.getType()) && fairyRingStaffRequired
-			&& !DRAMEN_STAFF.isSatisfiedBy(ownedItems, PathfinderConfig.CURRENCIES, currencyThreshold))
+			&& !DRAMEN_STAFF.isSatisfiedBy(ownedItems, TransportItems.CURRENCIES, currencyThreshold))
 		{
 			return false;
 		}
 
 		TransportItems transportItems = transport.getItemRequirements();
 		return transportItems == null
-			|| transportItems.isSatisfiedBy(ownedItems, PathfinderConfig.CURRENCIES, currencyThreshold);
+			|| transportItems.isSatisfiedBy(ownedItems, TransportItems.CURRENCIES, currencyThreshold);
 	}
 
 	/**
@@ -146,16 +145,16 @@ public final class TransportEligibility
 	{
 		TransportItems transportItems = transport.getItemRequirements();
 		return transportItems == null
-			|| transportItems.isSatisfiedBy(carriedItems, PathfinderConfig.CURRENCIES, Integer.MAX_VALUE);
+			|| transportItems.isSatisfiedBy(carriedItems, TransportItems.CURRENCIES, Integer.MAX_VALUE);
 	}
 
 	/**
-	 * The item ids of the Dramen/Lunar staves that unlock fairy rings without the
-	 * Lumbridge Elite diary.
+	 * A copy of the item ids of the Dramen/Lunar staves that unlock fairy rings without
+	 * the Lumbridge Elite diary.
 	 */
 	public static int[] fairyStaffIds()
 	{
-		return DRAMEN_STAFF.getRequirements().get(0).getStaffIds();
+		return DRAMEN_STAFF.getRequirements().get(0).getStaffIds().clone();
 	}
 
 	/**
