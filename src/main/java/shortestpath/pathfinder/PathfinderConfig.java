@@ -24,7 +24,6 @@ import net.runelite.api.gameval.ItemID;
 import net.runelite.api.gameval.VarbitID;
 import shortestpath.Destination;
 import shortestpath.DestinationRequirements;
-import shortestpath.ItemVariations;
 import shortestpath.JewelleryBoxTier;
 import shortestpath.PrimitiveIntHashMap;
 import shortestpath.ShortestPathConfig;
@@ -40,6 +39,7 @@ import shortestpath.transport.OwnedItems;
 import shortestpath.transport.PohNexusPortal;
 import shortestpath.transport.PohMountedItem;
 import shortestpath.transport.Transport;
+import shortestpath.transport.TransportEligibility;
 import shortestpath.transport.TransportLoader;
 import shortestpath.transport.TransportType;
 import shortestpath.transport.TransportTypeConfig;
@@ -67,11 +67,6 @@ public class PathfinderConfig
 		};
 	public static final Set<Integer> CURRENCIES = Set.of(
 		ItemID.COINS, ItemID.VILLAGE_TRADE_STICKS, ItemID.ECTOTOKEN, ItemID.WARGUILD_TOKENS);
-	private static final TransportItems DRAMEN_STAFF = new TransportItems(
-		new int[][]{null},
-		new int[][]{ItemVariations.DRAMEN_STAFF.getIds()},
-		new int[][]{null},
-		new int[]{1});
 
 	/**
 	 * Item ids that only exist on Deadman Mode worlds ({@code WorldType.DEADMAN}).
@@ -138,6 +133,14 @@ public class PathfinderConfig
 	 */
 	private TransportAvailability transportAvailabilityWithoutBank;
 	private TransportAvailability transportAvailabilityWithBank;
+	/**
+	 * Client-state snapshot answering transport item-requirement questions for both
+	 * pathfinding ({@link TransportEligibility#usable}) and the bank-pickup display.
+	 * Rebuilt by {@link #refreshTransports} and lazily by {@link #getEligibility()} after
+	 * {@link #invalidateEligibility()}.
+	 */
+	private TransportEligibility eligibility;
+	private boolean eligibilityStale = true;
 	/**
 	 * Reference that points to either allDestinations or filteredDestinations
 	 */
@@ -525,7 +528,7 @@ public class PathfinderConfig
 		}
 		currentMaxQuestPoints = maximumQuestPoints();
 
-		// Fairy ring staff/diary requirements are enforced later in hasRequiredItems().
+		// Fairy ring staff/diary requirements are enforced by the eligibility snapshot.
 		transportTypeConfig.disableUnless(TransportType.FAIRY_RING,
 			client.getVarbitValue(VarbitID.FAIRY2_QUEENCURE_QUEST) > 39);
 		transportTypeConfig.disableUnless(TransportType.GNOME_GLIDER,
@@ -535,10 +538,10 @@ public class PathfinderConfig
 		transportTypeConfig.disableUnless(TransportType.SPIRIT_TREE,
 			QuestState.FINISHED.equals(getQuestState(Quest.TREE_GNOME_VILLAGE)));
 
-		// The owned items depend only on which containers are included, so collect them once rather
-		// than once per transport.
-		Map<Integer, Integer> carriedItems = collectItems(true, true, false, true);
-		Map<Integer, Integer> bankPathItems = includeBankPath ? collectItems(true, true, true, true) : carriedItems;
+		// The owned items depend only on which containers are included, so the eligibility
+		// snapshot collects them once rather than once per transport.
+		eligibility = collectEligibility();
+		eligibilityStale = false;
 		Set<Quest> refreshedQuests = new HashSet<>();
 		TransportAvailability.Builder withoutBank = new TransportAvailability.Builder(allTransports.length);
 		TransportAvailability.Builder withBank = new TransportAvailability.Builder(allTransports.length);
@@ -576,8 +579,8 @@ public class PathfinderConfig
 				continue;
 			}
 
-			boolean usableWithoutBank = hasRequiredItems(transport, carriedItems);
-			boolean usableWithBank = hasRequiredItems(transport, bankPathItems);
+			boolean usableWithoutBank = eligibility.usable(transport, false);
+			boolean usableWithBank = eligibility.usable(transport, true);
 			if (usableWithoutBank)
 			{
 				withoutBank.add(transport);
@@ -963,7 +966,7 @@ public class PathfinderConfig
 			case UNLOCKED:
 			case INVENTORY:
 			case INVENTORY_AND_BANK:
-				return true; // Will be checked later by hasRequiredItems
+				return true; // Will be checked later by the eligibility snapshot
 			case NONE:
 				return false;
 		}
@@ -1122,44 +1125,62 @@ public class PathfinderConfig
 	}
 
 	/**
-	 * Checks if {@code ownedItems} (from {@link #collectItems}) cover the equipment and inventory
-	 * items the transport requires
+	 * The transport eligibility snapshot captured at refresh time. When it is missing or
+	 * stale (a container change called {@link #invalidateEligibility()}) it is rebuilt,
+	 * but only on the client thread — off it the existing (possibly stale or null)
+	 * snapshot is returned, so callers must null-guard. Client-thread readers only;
+	 * never call from the pathfinder thread.
 	 */
-	private boolean hasRequiredItems(Transport transport, Map<Integer, Integer> ownedItems)
+	public TransportEligibility getEligibility()
 	{
-		if (TransportType.TELEPORTATION_ITEM.equals(transport.getType()) ||
-			TransportType.SEASONAL_TRANSPORTS.equals(transport.getType()) ||
-			TransportType.QUETZAL_WHISTLE.equals(transport.getType()))
+		if ((eligibility == null || eligibilityStale)
+			&& Thread.currentThread().equals(client.getClientThread()))
 		{
-			switch (transportTypeConfig.getTeleportationItemSetting())
+			eligibility = collectEligibility();
+			eligibilityStale = false;
+		}
+		return eligibility;
+	}
+
+	/**
+	 * Marks the eligibility snapshot stale; the next client-thread {@link #getEligibility()}
+	 * call rebuilds it. Called when a bank/inventory/equipment container change arrives;
+	 * refreshTransports also rebuilds it directly.
+	 */
+	public void invalidateEligibility()
+	{
+		eligibilityStale = true;
+	}
+
+	/**
+	 * Captures the client state both the pathfinding verdicts and the bank-pickup plans
+	 * read: the carried pool (inventory + worn + rune pouch in hand), the bank-path pool
+	 * (which adds the bank contents when bank paths are enabled), the bank contents
+	 * themselves, the runes inside a banked rune pouch, the fairy-ring staff gate and
+	 * the currency threshold.
+	 */
+	private TransportEligibility collectEligibility()
+	{
+		Map<Integer, Integer> carriedItems = collectItems(true, true, false, true);
+		Map<Integer, Integer> bankPathItems = includeBankPath ? collectItems(true, true, true, true) : carriedItems;
+		Map<Integer, Integer> bankHas = new HashMap<>();
+		OwnedItems.addContainer(bankHas, bank);
+		int bankPouchId = -1;
+		for (int pouchId : RUNE_POUCHES)
+		{
+			if (bankHas.containsKey(pouchId))
 			{
-				case ALL:
-				case ALL_NON_CONSUMABLE:
-				case UNLOCKED:
-				case UNLOCKED_NON_CONSUMABLE:
-					return true;
-				case NONE:
-					return false;
-				default:
-					break;
+				bankPouchId = pouchId;
+				break;
 			}
 		}
-
-		// Fairy rings require Dramen/Lunar staff unless Lumbridge Elite diary is complete
-		if (TransportType.FAIRY_RING.equals(transport.getType()))
-		{
-			int lumbridgeDiaryComplete = varbitValues.getOrDefault(VarbitID.LUMBRIDGE_DIARY_ELITE_COMPLETE, 0);
-			if (lumbridgeDiaryComplete != 1)
-			{
-				if (!DRAMEN_STAFF.isSatisfiedBy(ownedItems, CURRENCIES, currencyThreshold))
-				{
-					return false;
-				}
-			}
-		}
-
-		TransportItems transportItems = transport.getItemRequirements();
-		return transportItems == null || transportItems.isSatisfiedBy(ownedItems, CURRENCIES, currencyThreshold);
+		Map<Integer, Integer> bankPouchRunes = bankPouchId == -1
+			? Map.of()
+			: OwnedItems.runePouchContents(client);
+		boolean fairyRingStaffRequired =
+			client.getVarbitValue(VarbitID.LUMBRIDGE_DIARY_ELITE_COMPLETE) != 1;
+		return new TransportEligibility(carriedItems, bankPathItems, bankHas, bankPouchId, bankPouchRunes,
+			fairyRingStaffRequired, transportTypeConfig.getTeleportationItemSetting(), currencyThreshold);
 	}
 
 	/**

@@ -1036,6 +1036,7 @@ public class ShortestPathPlugin extends Plugin
 		if (id == InventoryID.BANK || id == InventoryID.INV || id == InventoryID.WORN)
 		{
 			bankPickupDirty = true;
+			pathfinderConfig.invalidateEligibility();
 		}
 	}
 
