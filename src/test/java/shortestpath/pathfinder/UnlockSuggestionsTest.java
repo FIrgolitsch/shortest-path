@@ -330,8 +330,8 @@ public class UnlockSuggestionsTest
 		// weigh more than two hops behind two different quests, though the first asks for less.
 		int[] oneQuest = new int[Capability.Effort.values().length];
 		oneQuest[Capability.Effort.PROGRESS.ordinal()] = 1;
-		long oneQuestThrice = 3 * UnlockSuggestions.Cost.of(oneQuest);
-		long twoQuests = UnlockSuggestions.Cost.of(oneQuest) + UnlockSuggestions.Cost.of(oneQuest);
+		long oneQuestThrice = 3 * UnlockSuggestions.cost(oneQuest);
+		long twoQuests = UnlockSuggestions.cost(oneQuest) + UnlockSuggestions.cost(oneQuest);
 
 		assertTrue(oneQuestThrice > twoQuests);
 	}

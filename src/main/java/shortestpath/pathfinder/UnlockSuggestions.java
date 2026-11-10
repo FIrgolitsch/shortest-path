@@ -1,7 +1,9 @@
 package shortestpath.pathfinder;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Deque;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
@@ -133,9 +135,9 @@ public final class UnlockSuggestions
 		BooleanSupplier stop = () -> cancelled.getAsBoolean() || System.nanoTime() > deadline;
 		int[] targets = goals.tiles().stream().mapToInt(Integer::intValue).toArray();
 		ComponentGraph graph = new ComponentGraph(stat, obtainable.get());
-		long[] cost = new long[graph.edgeCount()];
-		Capability[] opens = new Capability[graph.edgeCount()];
-		int[] path = null;
+		long[] cost = new long[graph.transports.size()];
+		Capability[] opens = new Capability[cost.length];
+		Deque<Integer> path = null;
 		if (!stop.getAsBoolean())
 		{
 			weigh(graph, cost, opens);
@@ -155,7 +157,7 @@ public final class UnlockSuggestions
 			if (opens[edge] != null)
 			{
 				unlocks = unlocks == null ? opens[edge] : unlocks.union(opens[edge]);
-				locked.add(graph.transport(edge));
+				locked.add(graph.transports.get(edge));
 			}
 		}
 		if (unlocks == null)
@@ -186,8 +188,8 @@ public final class UnlockSuggestions
 		Map<Transport, Long> lockCost = new IdentityHashMap<>();
 		for (int edge = 0; edge < cost.length; edge++)
 		{
-			Transport transport = graph.transport(edge);
-			long duration = graph.duration(edge);
+			Transport transport = graph.transports.get(edge);
+			long duration = graph.durations.get(edge);
 			if (transport == null)
 			{
 				cost[edge] = duration;
@@ -199,7 +201,7 @@ public final class UnlockSuggestions
 				long best = requirements.usable(transport) ? 0 : ComponentGraph.CLOSED;
 				for (Capability capability : best == 0 ? List.<Capability>of() : requirements.capabilities(transport))
 				{
-					long weight = Cost.of(requirements.effortUnits(capability));
+					long weight = cost(requirements.effortUnits(capability));
 					if (weight < best)
 					{
 						best = weight;
@@ -214,32 +216,24 @@ public final class UnlockSuggestions
 		}
 	}
 
+	private static final int TIER_BITS = 9;
+	private static final int DURATION_BITS = 63 - TIER_BITS * Capability.Effort.values().length;
+
 	/**
-	 * An edge's cost packed into one long so that comparing two compares them lexicographically:
-	 * the units of each effort tier, hardest first, above the duration in ticks. Repeated uses of a
-	 * locked transport add up, keeping the costs additive for Dijkstra; units overflowing their field
-	 * carry into the harder tier above, which only makes a pathological path dearer.
+	 * The cost of opening with these {@link Requirements#effortUnits units}, without duration. An
+	 * edge's cost is packed into one long so that comparing two compares them lexicographically: the
+	 * units of each effort tier, hardest first, above the duration in ticks. Repeated uses of a locked
+	 * transport add up, keeping the costs additive for Dijkstra; units overflowing their field carry
+	 * into the harder tier above, which only makes a pathological path dearer.
 	 */
-	static final class Cost
+	static long cost(int[] units)
 	{
-		static final int TIER_BITS = 9;
-		static final int DURATION_BITS = 63 - TIER_BITS * Capability.Effort.values().length;
-		private static final int TIER_MAX = (1 << TIER_BITS) - 1;
-
-		private Cost()
+		long packed = 0;
+		for (int tier = units.length - 1; tier >= 0; tier--)
 		{
+			packed = (packed << TIER_BITS) | Math.min(units[tier], (1 << TIER_BITS) - 1);
 		}
-
-		/** The cost of opening with these {@link Requirements#effortUnits units}, without duration. */
-		static long of(int[] units)
-		{
-			long packed = 0;
-			for (int tier = units.length - 1; tier >= 0; tier--)
-			{
-				packed = (packed << TIER_BITS) | Math.min(units[tier], TIER_MAX);
-			}
-			return packed << DURATION_BITS;
-		}
+		return packed << DURATION_BITS;
 	}
 
 	/**
@@ -275,8 +269,10 @@ public final class UnlockSuggestions
 	}
 
 	/**
-	 * Routing components joined by the obtainable transports and by the static crossings. Walking within a component is free and positional restrictions such as avoiding the
-	 * Wilderness are ignored, so reachability here is optimistic; the search rerun has the last word.
+	 * Routing components joined by the obtainable transports and by the static crossings. Walking
+	 * within a component is free and positional restrictions such as avoiding the Wilderness are
+	 * ignored, so reachability here is optimistic; the search rerun has the last word. Built and
+	 * searched once per look.
 	 * ponytail: free walking leaves only the transports' durations to break ties between unlocks of
 	 * equal effort; weigh walks between a component's sites if those ties pick badly.
 	 */
@@ -295,6 +291,11 @@ public final class UnlockSuggestions
 		private final List<PrimitiveIntList> outgoing = new ArrayList<>();
 		private final PrimitiveIntList anywhere = new PrimitiveIntList();
 		private final PrimitiveIntList durations = new PrimitiveIntList();
+		// The search: each edge's cost, each component's distance, the edge it was reached by and the
+		// component that edge left (-1 at the start), and the components still to settle.
+		private long[] cost, distance;
+		private int[] via, previous;
+		private final PriorityQueue<long[]> queue = new PriorityQueue<>((a, b) -> Long.compare(a[0], b[0]));
 
 		ComponentGraph(RoutingStatic stat, TransportAvailability obtainable)
 		{
@@ -362,27 +363,6 @@ public final class UnlockSuggestions
 			}
 		}
 
-		int edgeCount()
-		{
-			return transports.size();
-		}
-
-		int to(int edge)
-		{
-			return to.get(edge);
-		}
-
-		/** The ticks the edge takes. */
-		int duration(int edge)
-		{
-			return durations.get(edge);
-		}
-
-		Transport transport(int edge)
-		{
-			return transports.get(edge);
-		}
-
 		boolean[] components(CollisionMap collision, int... tiles)
 		{
 			boolean[] components = new boolean[componentCount];
@@ -403,15 +383,15 @@ public final class UnlockSuggestions
 		 * anywhere through a teleport, to a {@code targets} component, in order; {@code null} when
 		 * every way there is {@link #CLOSED}, or once {@code stop} says so.
 		 */
-		int[] cheapest(boolean[] starts, boolean[] targets, long[] cost, BooleanSupplier stop)
+		Deque<Integer> cheapest(boolean[] starts, boolean[] targets, long[] cost, BooleanSupplier stop)
 		{
-			long[] distance = new long[componentCount];
+			this.cost = cost;
+			distance = new long[componentCount];
 			Arrays.fill(distance, Long.MAX_VALUE);
-			// The edge each component was reached by, and the component it left: -1 at the start.
-			int[] via = new int[componentCount], previous = new int[componentCount];
+			via = new int[componentCount];
+			previous = new int[componentCount];
 			Arrays.fill(via, -1);
 			Arrays.fill(previous, -1);
-			PriorityQueue<long[]> queue = new PriorityQueue<>((a, b) -> Long.compare(a[0], b[0]));
 			for (int component = 0; component < componentCount; component++)
 			{
 				if (starts[component])
@@ -422,7 +402,7 @@ public final class UnlockSuggestions
 			}
 			for (int i = 0; i < anywhere.size(); i++)
 			{
-				relax(anywhere.get(i), -1, 0, cost, distance, via, previous, queue);
+				relax(anywhere.get(i), -1, 0);
 			}
 			while (!queue.isEmpty() && !stop.getAsBoolean())
 			{
@@ -434,33 +414,23 @@ public final class UnlockSuggestions
 				}
 				if (targets[component])
 				{
-					PrimitiveIntList edges = new PrimitiveIntList();
-					for (int at = component; via[at] >= 0; at = previous[at])
+					Deque<Integer> path = new ArrayDeque<>();
+					for (int at = component; at >= 0 && via[at] >= 0; at = previous[at])
 					{
-						edges.add(via[at]);
-						if (previous[at] < 0)
-						{
-							break;
-						}
-					}
-					int[] path = new int[edges.size()];
-					for (int i = 0; i < path.length; i++)
-					{
-						path[i] = edges.get(path.length - 1 - i);
+						path.addFirst(via[at]);
 					}
 					return path;
 				}
 				PrimitiveIntList edges = outgoing.get(component);
 				for (int i = 0; i < edges.size(); i++)
 				{
-					relax(edges.get(i), component, entry[0], cost, distance, via, previous, queue);
+					relax(edges.get(i), component, entry[0]);
 				}
 			}
 			return null;
 		}
 
-		private void relax(int edge, int fromComponent, long at, long[] cost, long[] distance, int[] via,
-			int[] previous, PriorityQueue<long[]> queue)
+		private void relax(int edge, int fromComponent, long at)
 		{
 			if (cost[edge] == CLOSED)
 			{
@@ -471,7 +441,7 @@ public final class UnlockSuggestions
 			{
 				reached = CLOSED - 1;
 			}
-			for (int component : siteComponents[to(edge)])
+			for (int component : siteComponents[to.get(edge)])
 			{
 				if (reached < distance[component])
 				{
