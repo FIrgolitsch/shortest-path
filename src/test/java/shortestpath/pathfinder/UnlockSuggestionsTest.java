@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
 import net.runelite.api.Item;
@@ -24,6 +25,7 @@ import net.runelite.api.Skill;
 import net.runelite.api.gameval.DBTableID;
 import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.gameval.ItemID;
+import net.runelite.api.gameval.VarbitID;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
@@ -39,6 +41,7 @@ import shortestpath.presentation.PathAnnotatorTestServices;
 import shortestpath.requirement.Capability;
 import shortestpath.requirement.model.SkillLevels;
 import shortestpath.settings.TeleportationItem;
+import shortestpath.transport.Transport;
 import shortestpath.transport.TransportType;
 
 /** What an A* search that can't reach its target suggests unlocking, on the real world data. */
@@ -275,6 +278,27 @@ public class UnlockSuggestionsTest
 		when(client.getBoostedSkillLevel(Skill.AGILITY)).thenReturn(79);
 		pathfinderConfig.refresh();
 		assertTrue("79 Agility also gets there", search(LUMBRIDGE, target).getResult().isReached());
+	}
+
+	@Test
+	public void fairyRingsThePlayerCanUseCarryTheWayToALockedTransport()
+	{
+		// On the island south-east of Ardougne the only way off is the fairy ring. Without the
+		// Lumbridge Elite diary the rings need a staff, which the player carries.
+		config.disableTransportToggles();
+		config.set("useShips", true);
+		config.set("useFairyRings", true);
+		when(client.getVarbitValue(VarbitID.FAIRY2_QUEENCURE_QUEST)).thenReturn(100);
+		when(client.getVarbitValue(VarbitID.LUMBRIDGE_DIARY_ELITE_COMPLETE)).thenReturn(0);
+		setup(99, new Item(ItemID.DRAMEN_STAFF, 1));
+
+		AStarPathfinder search = search(WorldPointUtil.packWorldPoint(2700, 3246, 0), ALDARIN);
+
+		assertFalse(search.getResult().isReached());
+		UnlockSuggestions.Suggestion suggestion = search.getUnlockSuggestions().get(0);
+		assertEquals(Capability.items(Map.of(ItemID.COINS, 20)), suggestion.getCapability());
+		assertEquals(List.of(TransportType.SHIP),
+			suggestion.getTransports().stream().map(Transport::getType).collect(Collectors.toList()));
 	}
 
 	@Test

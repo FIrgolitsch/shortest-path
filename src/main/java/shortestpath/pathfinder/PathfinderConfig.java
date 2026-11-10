@@ -1,7 +1,9 @@
 package shortestpath.pathfinder;
 
 import java.util.*;
+import java.util.function.BiPredicate;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 import lombok.Getter;
 import net.runelite.api.*;
@@ -783,6 +785,17 @@ public class PathfinderConfig
 	private static TransportAvailabilities availabilities(Transport[] transports, Requirements requirements)
 	{
 		TransportEligibility eligibility = requirements.eligibility();
+		return availabilities(transports, eligibility, offered -> requirements.gates(offered) == RejectionReason.NONE,
+			eligibility::usable);
+	}
+
+	/**
+	 * The transports {@code admit} lets through, in the views {@code usable} allows them in: without
+	 * and with a bank visit.
+	 */
+	private static TransportAvailabilities availabilities(Transport[] transports, TransportEligibility eligibility,
+		Predicate<Transport> admit, BiPredicate<Transport, BankVisitState> usable)
+	{
 		TransportAvailability.Builder withoutBank = new TransportAvailability.Builder(transports.length);
 		TransportAvailability.Builder withBank = new TransportAvailability.Builder(transports.length);
 		for (Transport transport : transports)
@@ -795,13 +808,13 @@ public class PathfinderConfig
 
 			// The named gates run first; a transport failing any of them is
 			// dropped before either item pool is consulted.
-			if (requirements.gates(offered) != RejectionReason.NONE)
+			if (!admit.test(offered))
 			{
 				continue;
 			}
 
-			boolean usableWithoutBank = eligibility.usable(offered, BankVisitState.CARRIED);
-			boolean usableWithBank = eligibility.usable(offered, BankVisitState.BANKED);
+			boolean usableWithoutBank = usable.test(offered, BankVisitState.CARRIED);
+			boolean usableWithBank = usable.test(offered, BankVisitState.BANKED);
 			// Both pools empty for its items == the ITEM_REQUIREMENT gate
 			// the composite check() would apply — the same skip, spelled out.
 			if (!usableWithoutBank && !usableWithBank)
@@ -861,20 +874,10 @@ public class PathfinderConfig
 		Function<TransportAvailabilities, PreparedRoutingAccount> compile = availabilities -> PreparedRoutingAccount.compile(
 			availabilities.withoutBank, availabilities.withBank, bankPath, banks, visitCost, true,
 			this::getAdditionalTransportCost);
-		return new UnlockSuggestions(current, granted -> compile.apply(availabilities(transports, granted)), () ->
-		{
-			TransportAvailability.Builder obtainable = new TransportAvailability.Builder(transports.length);
-			for (Transport transport : transports)
-			{
-				if (current.obtainable(transport))
-				{
-					obtainable.add(transport);
-				}
-			}
-			obtainable.remapPohTransports();
-			TransportAvailability built = obtainable.build();
-			return compile.apply(new TransportAvailabilities(built, built));
-		});
+		// Items don't close an obtainable transport, so one view holds them all.
+		return new UnlockSuggestions(current, granted -> compile.apply(availabilities(transports, granted)),
+			() -> availabilities(transports, current.eligibility(), current::obtainable,
+				(offered, banked) -> banked == BankVisitState.CARRIED).withoutBank);
 	}
 
 	public boolean avoidWilderness(int packedPosition, int packedNeighborPosition, boolean targetInWilderness)

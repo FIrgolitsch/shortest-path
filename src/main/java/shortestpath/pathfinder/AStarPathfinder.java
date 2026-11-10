@@ -334,7 +334,7 @@ public final class AStarPathfinder implements ActiveSearch
 		unreachableIn = null;
 		if (staticData == null || cancelled) return;
 		long started = System.nanoTime();
-		unlockSearch = unlocks.find(staticData, collision, account, start, goals, restrictions, heuristicWeight,
+		unlockSearch = unlocks.find(staticData, collision, start, goals, restrictions, heuristicWeight,
 			() -> cancelled);
 		unlockSearchNanos = System.nanoTime() - started;
 	}

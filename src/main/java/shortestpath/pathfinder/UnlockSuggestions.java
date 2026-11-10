@@ -2,16 +2,15 @@ package shortestpath.pathfinder;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
-import java.util.Set;
 import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import lombok.Getter;
+import shortestpath.PrimitiveIntHashMap;
 import shortestpath.PrimitiveIntList;
 import shortestpath.pathfinder.astar.AStarForwardSearch;
 import shortestpath.pathfinder.astar.PreparedRoutingAccount;
@@ -116,22 +115,23 @@ public final class UnlockSuggestions
 
 	private final Requirements requirements;
 	private final Function<Requirements, PreparedRoutingAccount> accountWith;
-	private final Supplier<PreparedRoutingAccount> obtainable;
+	private final Supplier<TransportAvailability> obtainable;
 
 	/**
 	 * @param accountWith the routing account the player would have under other requirements
-	 * @param obtainable the routing account with every transport no setting or world restriction closes
+	 * @param obtainable every transport no setting or world restriction closes, each fairy ring
+	 * wrapped once as the requirements see it
 	 */
 	UnlockSuggestions(Requirements requirements, Function<Requirements, PreparedRoutingAccount> accountWith,
-		Supplier<PreparedRoutingAccount> obtainable)
+		Supplier<TransportAvailability> obtainable)
 	{
 		this.requirements = requirements;
 		this.accountWith = accountWith;
 		this.obtainable = obtainable;
 	}
 
-	Found find(RoutingStatic stat, CollisionMap collision, PreparedRoutingAccount account, int start,
-		GoalStates goals, SearchRestrictions restrictions, double heuristicWeight, BooleanSupplier cancelled)
+	Found find(RoutingStatic stat, CollisionMap collision, int start, GoalStates goals,
+		SearchRestrictions restrictions, double heuristicWeight, BooleanSupplier cancelled)
 	{
 		long started = System.nanoTime();
 		long deadline = started + (BUDGET_NANOS - WIND_DOWN_NANOS) * timeScale;
@@ -140,7 +140,7 @@ public final class UnlockSuggestions
 		ComponentGraph graph = new ComponentGraph(stat, obtainable.get());
 		long[] cost = new long[graph.edgeCount()];
 		Capability[] opens = new Capability[graph.edgeCount()];
-		weigh(graph, graph.edgesOf(account), cost, opens);
+		weigh(graph, cost, opens);
 		int[] path = graph.cheapest(graph.components(collision, start), graph.components(collision, targets), cost);
 		long graphNanos = System.nanoTime() - started;
 		if (path == null)
@@ -179,7 +179,7 @@ public final class UnlockSuggestions
 	 * cheapest of the capabilities that would open it on its own. A locked transport no capability
 	 * opens, such as one behind a declared unlock, costs {@link ComponentGraph#CLOSED}.
 	 */
-	private void weigh(ComponentGraph graph, boolean[] usable, long[] cost, Capability[] opens)
+	private void weigh(ComponentGraph graph, long[] cost, Capability[] opens)
 	{
 		Map<Transport, Capability> cheapest = new IdentityHashMap<>();
 		Map<Transport, Long> lockCost = new IdentityHashMap<>();
@@ -187,15 +187,16 @@ public final class UnlockSuggestions
 		{
 			Transport transport = graph.transport(edge);
 			long duration = graph.duration(edge);
-			if (usable[edge])
+			if (transport == null)
 			{
 				cost[edge] = duration;
 				continue;
 			}
 			if (!lockCost.containsKey(transport))
 			{
-				long best = ComponentGraph.CLOSED;
-				for (Capability capability : requirements.capabilities(transport))
+				// The player can use it already: it costs only its duration.
+				long best = requirements.usable(transport) ? 0 : ComponentGraph.CLOSED;
+				for (Capability capability : best == 0 ? List.<Capability>of() : requirements.capabilities(transport))
 				{
 					long weight = Cost.of(requirements.effortUnits(capability));
 					if (weight < best)
@@ -268,8 +269,7 @@ public final class UnlockSuggestions
 	}
 
 	/**
-	 * Routing components joined by an account's transports, in either bank layer, and by the static
-	 * crossings. Walking within a component is free and positional restrictions such as avoiding the
+	 * Routing components joined by the obtainable transports and by the static crossings. Walking within a component is free and positional restrictions such as avoiding the
 	 * Wilderness are ignored, so reachability here is optimistic; the search rerun has the last word.
 	 * ponytail: free walking leaves only the transports' durations to break ties between unlocks of
 	 * equal effort; weigh walks between a component's sites if those ties pick badly.
@@ -290,7 +290,7 @@ public final class UnlockSuggestions
 		private final PrimitiveIntList anywhere = new PrimitiveIntList();
 		private final PrimitiveIntList durations = new PrimitiveIntList();
 
-		ComponentGraph(RoutingStatic stat, PreparedRoutingAccount account)
+		ComponentGraph(RoutingStatic stat, TransportAvailability obtainable)
 		{
 			this.stat = stat;
 			siteComponents = new int[stat.siteCount()][];
@@ -310,20 +310,24 @@ public final class UnlockSuggestions
 			{
 				outgoing.add(new PrimitiveIntList());
 			}
-			// ponytail: both bank layers count as one, as if every route could visit a bank; split
+			// ponytail: one view for both bank layers, as if every route could visit a bank; split
 			// them if banked-only transports start producing suggestions the rerun rejects.
-			for (BankVisitState banked : BankVisitState.values())
+			PrimitiveIntHashMap<Transport[]> local = obtainable.getTransportsPacked();
+			int[] origins = local.keys();
+			Arrays.sort(origins);
+			for (int origin : origins)
 			{
-				for (int i = 0; i < account.localCount(banked); i++)
+				for (Transport transport : local.get(origin))
 				{
-					add(stat.siteIndex(account.localOrigin(banked, i)), stat.siteIndex(account.localDestination(banked, i)),
-						account.localTransport(banked, i), account.localTransport(banked, i).getDuration());
+					add(stat.siteIndex(origin), stat.siteIndex(transport.getDestination()), transport,
+						transport.getDuration());
 				}
-				for (int i = 0; i < account.globalCount(banked); i++)
+			}
+			for (Transport transport : obtainable.getUsableTeleports())
+			{
+				if (TeleportCapability.ALL.canCast(transport))
 				{
-					add(-1, stat.siteIndex(account.globalDestination(banked, i)),
-						account.globalTransport(TeleportCapability.ALL, banked, i),
-						account.globalTransport(TeleportCapability.ALL, banked, i).getDuration());
+					add(-1, stat.siteIndex(transport.getDestination()), transport, transport.getDuration());
 				}
 			}
 			for (int i = 0; i < stat.crossingCount(); i++)
@@ -371,29 +375,6 @@ public final class UnlockSuggestions
 		Transport transport(int edge)
 		{
 			return transports.get(edge);
-		}
-
-		/** The edges whose transports {@code account} may use, and every crossing. */
-		boolean[] edgesOf(PreparedRoutingAccount account)
-		{
-			Set<Transport> usable = Collections.newSetFromMap(new IdentityHashMap<>());
-			for (BankVisitState banked : BankVisitState.values())
-			{
-				for (int i = 0; i < account.localCount(banked); i++)
-				{
-					usable.add(account.localTransport(banked, i));
-				}
-				for (int i = 0; i < account.globalCount(banked); i++)
-				{
-					usable.add(account.globalTransport(TeleportCapability.ALL, banked, i));
-				}
-			}
-			boolean[] edges = new boolean[edgeCount()];
-			for (int edge = 0; edge < edges.length; edge++)
-			{
-				edges[edge] = transports.get(edge) == null || usable.contains(transports.get(edge));
-			}
-			return edges;
 		}
 
 		boolean[] components(CollisionMap collision, int... tiles)
