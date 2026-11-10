@@ -208,6 +208,20 @@ public class UnlockSuggestionsTest
 	}
 
 	@Test
+	public void aLookOutOfTimeStopsBetweenStages()
+	{
+		// With no budget at all it stops once the component graph is built, before weighing anything.
+		UnlockSuggestions.timeScale = 0;
+		AStarPathfinder search = aldarinSearch(done -> { });
+		search.run();
+		search.findUnlockSuggestions();
+
+		assertEquals(UnlockSuggestions.Outcome.INCONCLUSIVE, search.getUnlockSearch().getOutcome());
+		assertTrue(search.getUnlockSuggestion().isEmpty());
+		assertEquals(0, search.getUnlockSearch().getRerunNanos());
+	}
+
+	@Test
 	public void withoutTheBoatTheQuetzalNeedsTwilightsPromise()
 	{
 		config.disableTransportToggles();

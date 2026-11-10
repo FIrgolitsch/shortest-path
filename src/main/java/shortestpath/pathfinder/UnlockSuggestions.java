@@ -35,7 +35,11 @@ import shortestpath.transport.Transport;
  */
 public final class UnlockSuggestions
 {
-	/** Up to one game tick, on top of the search that found the target unreachable. */
+	/**
+	 * Up to one game tick, on top of the search that found the target unreachable. The deadline is
+	 * checked inside the searches and between the stages that build their graphs, so a stage that
+	 * is already running can still carry the look past it.
+	 */
 	static final long BUDGET_NANOS = 600_000_000L;
 	/** A rerun stopped at the deadline takes a moment to return, so it is stopped this much early. */
 	private static final long WIND_DOWN_NANOS = 10_000_000L;
@@ -81,7 +85,7 @@ public final class UnlockSuggestions
 		CONFIRMED,
 		/** The rerun with the unlocks granted settled that the target is still unreachable. */
 		REJECTED,
-		/** The rerun didn't settle it within the budget. */
+		/** Not settled within the budget. */
 		INCONCLUSIVE,
 		CANCELLED
 	}
@@ -134,12 +138,17 @@ public final class UnlockSuggestions
 		ComponentGraph graph = new ComponentGraph(stat, obtainable.get());
 		long[] cost = new long[graph.edgeCount()];
 		Capability[] opens = new Capability[graph.edgeCount()];
-		weigh(graph, cost, opens);
-		int[] path = graph.cheapest(graph.components(collision, start), graph.components(collision, targets), cost);
+		int[] path = null;
+		if (!stop.getAsBoolean())
+		{
+			weigh(graph, cost, opens);
+			path = stop.getAsBoolean() ? null
+				: graph.cheapest(graph.components(collision, start), graph.components(collision, targets), cost, stop);
+		}
 		long graphNanos = System.nanoTime() - started;
 		if (path == null)
 		{
-			return new Found(Outcome.CLOSED, null, graphNanos, 0);
+			return new Found(stop.getAsBoolean() ? stopped(cancelled) : Outcome.CLOSED, null, graphNanos, 0);
 		}
 
 		// The unlocks of the locked transports on the path, each once, in the order the route takes them.
@@ -162,10 +171,14 @@ public final class UnlockSuggestions
 		AStarForwardSearch.Result route = rerun(unlocks, stat, collision, targets, start, heuristicWeight, stop,
 			deadline, restrictions, goals);
 		long rerunNanos = System.nanoTime() - rerunStarted;
-		Outcome outcome = cancelled.getAsBoolean() ? Outcome.CANCELLED
-			: route == null || route.cancelled() ? Outcome.INCONCLUSIVE
+		Outcome outcome = route == null || route.cancelled() ? stopped(cancelled)
 			: route.reached() ? Outcome.CONFIRMED : Outcome.REJECTED;
 		return new Found(outcome, explanation, graphNanos, rerunNanos);
+	}
+
+	private static Outcome stopped(BooleanSupplier cancelled)
+	{
+		return cancelled.getAsBoolean() ? Outcome.CANCELLED : Outcome.INCONCLUSIVE;
 	}
 
 	/**
@@ -245,7 +258,12 @@ public final class UnlockSuggestions
 		int[] targets, int start, double heuristicWeight, BooleanSupplier stop, long deadline,
 		SearchRestrictions restrictions, GoalStates goals)
 	{
-		SiteGraph granted = SiteGraph.compile(stat, accountWith.apply(requirements.granting(capability)));
+		PreparedRoutingAccount account = accountWith.apply(requirements.granting(capability));
+		if (stop.getAsBoolean())
+		{
+			return null;
+		}
+		SiteGraph granted = SiteGraph.compile(stat, account);
 		if (stop.getAsBoolean())
 		{
 			return null;
@@ -389,9 +407,9 @@ public final class UnlockSuggestions
 		/**
 		 * The edges of the cheapest path by {@code cost} from a {@code starts} component, or from
 		 * anywhere through a teleport, to a {@code targets} component, in order; {@code null} when
-		 * every way there is {@link #CLOSED}.
+		 * every way there is {@link #CLOSED}, or once {@code stop} says so.
 		 */
-		int[] cheapest(boolean[] starts, boolean[] targets, long[] cost)
+		int[] cheapest(boolean[] starts, boolean[] targets, long[] cost, BooleanSupplier stop)
 		{
 			long[] distance = new long[componentCount];
 			Arrays.fill(distance, Long.MAX_VALUE);
@@ -412,7 +430,7 @@ public final class UnlockSuggestions
 			{
 				relax(anywhere.get(i), -1, 0, cost, distance, via, previous, queue);
 			}
-			while (!queue.isEmpty())
+			while (!queue.isEmpty() && !stop.getAsBoolean())
 			{
 				long[] entry = queue.poll();
 				int component = (int) entry[1];

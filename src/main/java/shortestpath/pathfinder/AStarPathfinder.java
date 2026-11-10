@@ -335,8 +335,17 @@ public final class AStarPathfinder implements ActiveSearch
 		unreachableIn = null;
 		if (staticData == null || cancelled) return;
 		long started = System.nanoTime();
-		unlockSearch = unlocks.find(staticData, collision, start, goals, restrictions, heuristicWeight,
-			() -> cancelled);
+		try
+		{
+			unlockSearch = unlocks.find(staticData, collision, start, goals, restrictions, heuristicWeight,
+				() -> cancelled);
+		}
+		// As in run(): the graphs it builds are large, so OOM is plausible; the suggestion is extra,
+		// so a failure only means there is none.
+		catch (RuntimeException | Error error)
+		{
+			unlockSearch = UnlockSuggestions.Found.NONE;
+		}
 		unlockSearchNanos = System.nanoTime() - started;
 	}
 
