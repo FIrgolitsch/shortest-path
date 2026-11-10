@@ -114,8 +114,8 @@ public class CapabilityTest
 		assertEquals(Capability.Effort.PROGRESS, novice.effort(quest));
 		assertEquals(Capability.Effort.PROGRESS, novice.effort(agility));
 		assertEquals(Capability.Effort.MAJOR, novice.effort(maxed));
-		assertEquals(Capability.Effort.PROGRESS, novice.effort(quest.plus(rope)));
-		int[] units = novice.effortUnits(quest.plus(rope).plus(agility));
+		assertEquals(Capability.Effort.PROGRESS, novice.effort(quest.union(rope)));
+		int[] units = novice.effortUnits(quest.union(rope).union(agility));
 		assertEquals(2, units[Capability.Effort.PROGRESS.ordinal()]);
 		assertEquals(1, units[Capability.Effort.ITEMS.ordinal()]);
 	}
@@ -123,8 +123,8 @@ public class CapabilityTest
 	@Test
 	public void unionAsksForEachRequirementOnce()
 	{
-		Capability fare = quests(Set.of(Quest.THE_FREMENNIK_TRIALS)).plus(Capability.items(Map.of(ItemID.COINS, 20)));
-		Capability climb = Capability.items(Map.of(ItemID.COINS, 30)).plus(skills(levels(Skill.AGILITY, 50)));
+		Capability fare = quests(Set.of(Quest.THE_FREMENNIK_TRIALS)).union(Capability.items(Map.of(ItemID.COINS, 20)));
+		Capability climb = Capability.items(Map.of(ItemID.COINS, 30)).union(skills(levels(Skill.AGILITY, 50)));
 
 		Capability both = fare.union(climb).union(fare);
 
@@ -161,18 +161,5 @@ public class CapabilityTest
 
 		assertEquals("Reach 750 music tracks", tracks.describe(id -> "?", false));
 		assertEquals(Capability.Effort.MAJOR, requirements.effort(tracks));
-	}
-
-	@Test
-	public void plusNeedsEverythingEitherNeeds()
-	{
-		Capability fare = quests(Set.of(Quest.THE_FREMENNIK_TRIALS)).plus(Capability.items(Map.of(ItemID.COINS, 20)));
-		Capability climb = Capability.items(Map.of(ItemID.COINS, 30)).plus(skills(levels(Skill.AGILITY, 50)));
-
-		Capability both = fare.plus(climb);
-
-		assertEquals(Set.of(Quest.THE_FREMENNIK_TRIALS), both.getQuests());
-		assertEquals(Map.of(ItemID.COINS, 50), both.getItems());
-		assertEquals(50, both.getSkillLevels().get(Skill.AGILITY));
 	}
 }

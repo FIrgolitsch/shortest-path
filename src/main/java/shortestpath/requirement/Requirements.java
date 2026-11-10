@@ -114,7 +114,7 @@ public final class Requirements
 		{
 			for (Map<Integer, Integer> carry : context.getEligibility().missingItems(transport))
 			{
-				alternatives.add(progress.plus(Capability.items(carry)));
+				alternatives.add(progress.union(Capability.items(carry)));
 			}
 		}
 		// Granting quests, levels and items leaves a var, a declared unlock, the respawn or a planted

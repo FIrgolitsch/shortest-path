@@ -15,7 +15,7 @@ import shortestpath.requirement.model.SkillLevels;
 
 /**
  * What the player could get to open a locked transport: quests to finish, skill levels to reach
- * and items to carry, in any mix. Bundles combine with {@link #plus} and read as one line through
+ * and items to carry, in any mix. Bundles combine with {@link #union} and read as one line through
  * {@link #describe}. What one is worth depends on
  * the player, so {@link Requirements#effortUnits} weighs them and
  * {@link RequirementContext#granting} applies them.
@@ -70,16 +70,6 @@ public final class Capability
 	public boolean isEmpty()
 	{
 		return quests.isEmpty() && skillLevels.isEmpty() && items.isEmpty();
-	}
-
-	/** Both bundles at once: every quest of either, the higher of each level, and both sets of items. */
-	public Capability plus(Capability other)
-	{
-		Set<Quest> allQuests = new HashSet<>(quests);
-		allQuests.addAll(other.quests);
-		Map<Integer, Integer> allItems = new HashMap<>(items);
-		other.items.forEach((id, quantity) -> allItems.merge(id, quantity, Integer::sum));
-		return of(allQuests, SkillLevels.merge(skillLevels, other.skillLevels), allItems);
 	}
 
 	/**
