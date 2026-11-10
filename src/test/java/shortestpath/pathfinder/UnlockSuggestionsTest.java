@@ -323,6 +323,19 @@ public class UnlockSuggestionsTest
 	}
 
 	@Test
+	public void aPathPaysForAnUnlockOncePerUse()
+	{
+		// The documented approximation: costs add up per locked use, so three hops behind one quest
+		// weigh more than two hops behind two different quests, though the first asks for less.
+		int[] oneQuest = new int[Capability.Effort.values().length];
+		oneQuest[Capability.Effort.PROGRESS.ordinal()] = 1;
+		long oneQuestThrice = 3 * UnlockSuggestions.Cost.of(oneQuest);
+		long twoQuests = UnlockSuggestions.Cost.of(oneQuest) + UnlockSuggestions.Cost.of(oneQuest);
+
+		assertTrue(oneQuestThrice > twoQuests);
+	}
+
+	@Test
 	public void suggestionsStayWithinOneTickOnLongRoutes()
 	{
 		// A level 1 account has the most locked transports to weigh.

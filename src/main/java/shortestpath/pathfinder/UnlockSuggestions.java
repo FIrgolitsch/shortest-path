@@ -32,6 +32,13 @@ import shortestpath.transport.Transport;
  * quetzal however long the boat takes. The locked transports on the cheapest path name the unlocks,
  * each once, and the search is rerun with them granted: only if it then reaches the target are they
  * suggested.
+ *
+ * <p>The ranking is an approximation. Dijkstra needs additive costs, so a path costs the sum of its
+ * locked uses while the suggestion asks for their union: an unlock several hops share counts once
+ * per hop, and three hops behind one quest outweigh two hops behind two different quests. Each
+ * locked transport also takes its own cheapest capability, regardless of what the rest of the path
+ * already unlocks. Ranking by the union exactly would take a search over sets of unlocks; the rerun
+ * still checks whatever is suggested.
  */
 public final class UnlockSuggestions
 {
