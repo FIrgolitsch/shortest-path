@@ -400,12 +400,8 @@ public final class AStarPathfinder implements ActiveSearch
 		entries.put("Account prep", PathfinderStats.millis(getAccountPrepareNanos()));
 		if (getUnlockSearchNanos() > 0)
 		{
-			UnlockSuggestions.Found found = getUnlockSearch();
 			entries.put("Unlock search", PathfinderStats.millis(getUnlockSearchNanos()) + ", "
-				+ found.getOutcome().name().toLowerCase().replace('_', ' ')
-				+ (found.getExplanation() == null ? "" : ", " + found.getExplanation().getTransports().size() + " locked")
-				+ " (graph " + PathfinderStats.millis(found.getGraphNanos()) + ", rerun "
-				+ PathfinderStats.millis(found.getRerunNanos()) + ")");
+				+ getUnlockSearch().getOutcome().name().toLowerCase().replace('_', ' '));
 		}
 		if (getRoutingStaticNanos() >= STATIC_BUILD_THRESHOLD_NANOS)
 		{

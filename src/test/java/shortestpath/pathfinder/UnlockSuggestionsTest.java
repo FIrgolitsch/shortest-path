@@ -3,6 +3,7 @@ package shortestpath.pathfinder;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -224,7 +225,7 @@ public class UnlockSuggestionsTest
 
 		assertEquals(UnlockSuggestions.Outcome.INCONCLUSIVE, search.getUnlockSearch().getOutcome());
 		assertTrue(search.getUnlockSuggestion().isEmpty());
-		assertEquals(0, search.getUnlockSearch().getRerunNanos());
+		assertNull("nothing to rerun", search.getUnlockSearch().getExplanation());
 	}
 
 	@Test
@@ -253,7 +254,7 @@ public class UnlockSuggestionsTest
 		assertFalse(search.getResult().isReached());
 		assertEquals(UnlockSuggestions.Outcome.CLOSED, search.getUnlockSearch().getOutcome());
 		assertTrue(search.getUnlockSuggestion().isEmpty());
-		assertEquals(0, search.getUnlockSearch().getRerunNanos());
+		assertNull("nothing to rerun", search.getUnlockSearch().getExplanation());
 	}
 
 	@Test

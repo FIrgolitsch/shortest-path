@@ -9,6 +9,8 @@ import java.util.PriorityQueue;
 import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
 import lombok.Getter;
 import shortestpath.PrimitiveIntHashMap;
 import shortestpath.PrimitiveIntList;
@@ -92,25 +94,16 @@ public final class UnlockSuggestions
 		CANCELLED
 	}
 
-	/** What one look found, and how much it weighed up. */
+	/** What one look found. */
 	@Getter
+	@AllArgsConstructor(access = AccessLevel.PACKAGE)
 	public static final class Found
 	{
-		static final Found NONE = new Found(Outcome.NONE, null, 0, 0);
+		static final Found NONE = new Found(Outcome.NONE, null);
 
 		private final Outcome outcome;
 		/** The unlocks the cheapest path names, confirmed or not; {@code null} when there are none. */
 		private final Suggestion explanation;
-		/** Time spent on the component graph, and on the rerun. */
-		private final long graphNanos, rerunNanos;
-
-		Found(Outcome outcome, Suggestion explanation, long graphNanos, long rerunNanos)
-		{
-			this.outcome = outcome;
-			this.explanation = explanation;
-			this.graphNanos = graphNanos;
-			this.rerunNanos = rerunNanos;
-		}
 	}
 
 	private final Requirements requirements;
@@ -136,8 +129,7 @@ public final class UnlockSuggestions
 	Found find(RoutingStatic stat, CollisionMap collision, int start, GoalStates goals,
 		SearchRestrictions restrictions, double heuristicWeight, BooleanSupplier cancelled)
 	{
-		long started = System.nanoTime();
-		long deadline = started + budgetNanos - WIND_DOWN_NANOS;
+		long deadline = System.nanoTime() + budgetNanos - WIND_DOWN_NANOS;
 		BooleanSupplier stop = () -> cancelled.getAsBoolean() || System.nanoTime() > deadline;
 		int[] targets = goals.tiles().stream().mapToInt(Integer::intValue).toArray();
 		ComponentGraph graph = new ComponentGraph(stat, obtainable.get());
@@ -150,10 +142,9 @@ public final class UnlockSuggestions
 			path = stop.getAsBoolean() ? null
 				: graph.cheapest(graph.components(collision, start), graph.components(collision, targets), cost, stop);
 		}
-		long graphNanos = System.nanoTime() - started;
 		if (path == null)
 		{
-			return new Found(stop.getAsBoolean() ? stopped(cancelled) : Outcome.CLOSED, null, graphNanos, 0);
+			return new Found(stop.getAsBoolean() ? stopped(cancelled) : Outcome.CLOSED, null);
 		}
 
 		// The unlocks of the locked transports on the path, each once, in the order the route takes them.
@@ -169,16 +160,14 @@ public final class UnlockSuggestions
 		}
 		if (unlocks == null)
 		{
-			return new Found(Outcome.ALREADY_CONNECTED, null, graphNanos, 0);
+			return new Found(Outcome.ALREADY_CONNECTED, null);
 		}
 		Suggestion explanation = new Suggestion(unlocks, locked, requirements.effort(unlocks));
-		long rerunStarted = System.nanoTime();
 		AStarForwardSearch.Result route = rerun(unlocks, stat, collision, targets, start, heuristicWeight, stop,
 			deadline, restrictions, goals);
-		long rerunNanos = System.nanoTime() - rerunStarted;
 		Outcome outcome = route == null || route.cancelled() ? stopped(cancelled)
 			: route.reached() ? Outcome.CONFIRMED : Outcome.REJECTED;
-		return new Found(outcome, explanation, graphNanos, rerunNanos);
+		return new Found(outcome, explanation);
 	}
 
 	private static Outcome stopped(BooleanSupplier cancelled)
