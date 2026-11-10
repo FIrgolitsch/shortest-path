@@ -332,15 +332,8 @@ public final class TransportEligibility
 				{
 					continue;
 				}
-				int id = ids[0];
-				for (int variation : ids)
-				{
-					if (heldItems.carriedAndBanked().getOrDefault(variation, 0) >= pickupQuantity(branch))
-					{
-						id = variation;
-						break;
-					}
-				}
+				int owned = findCovering(ids, pickupQuantity(branch), Map.of(), heldItems.carriedAndBanked());
+				int id = owned != -1 ? owned : ids[0];
 				for (Map<Integer, Integer> set : sets)
 				{
 					Map<Integer, Integer> grown = new HashMap<>(set);
