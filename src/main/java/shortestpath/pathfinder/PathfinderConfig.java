@@ -4,6 +4,7 @@ import java.util.*;
 import java.util.function.BiPredicate;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.function.ToIntFunction;
 
 import lombok.Getter;
 import net.runelite.api.*;
@@ -635,24 +636,32 @@ public class PathfinderConfig
 	 */
 	public int getAdditionalTransportCost(Transport transport)
 	{
+		return additionalTransportCost(transport, type -> typeCosts[type.ordinal()], costConsumableTeleportationItems,
+			itemThresholdOverrides);
+	}
+
+	/** {@link #getAdditionalTransportCost} over cost settings the caller read. */
+	private static int additionalTransportCost(Transport transport, ToIntFunction<TransportType> typeCost,
+		int consumableCost, Map<Integer, Integer> thresholdOverrides)
+	{
 		// A pinned per-item threshold is the whole additional cost for a
 		// transport referencing that item — the user declared its exact
 		// tiles-saved value, so it replaces type-level and consumable pricing
 		// rather than stacking on top of them.
-		int thresholdOverride = memberThresholdOverride(transport);
+		int thresholdOverride = memberThresholdOverride(transport, thresholdOverrides);
 		if (thresholdOverride > 0)
 		{
 			return thresholdOverride;
 		}
 		if (transport.isConsumable() && TransportType.TELEPORTATION_ITEM.equals(transport.getType()))
 		{
-			return costConsumableTeleportationItems;
+			return consumableCost;
 		}
 		if (transport.isConsumable() && TransportType.QUETZAL_WHISTLE.equals(transport.getType()))
 		{
-			return typeCosts[transport.getType().ordinal()] + costConsumableTeleportationItems;
+			return typeCost.applyAsInt(transport.getType()) + consumableCost;
 		}
-		return typeCosts[transport.getType().ordinal()];
+		return typeCost.applyAsInt(transport.getType());
 	}
 
 	/**
@@ -677,7 +686,7 @@ public class PathfinderConfig
 	 * Scoped to the same item-teleport types as the restriction gate;
 	 * returns 0 when nothing matches.
 	 */
-	private int memberThresholdOverride(Transport transport)
+	private static int memberThresholdOverride(Transport transport, Map<Integer, Integer> itemThresholdOverrides)
 	{
 		if (itemThresholdOverrides.isEmpty() || !TeleportRestriction.isItemTeleportType(transport.getType()))
 		{
@@ -693,15 +702,15 @@ public class PathfinderConfig
 		{
 			for (ItemRequirement.Branch branch : requirement.getBranches())
 			{
-				max = Math.max(max, maxOverride(branch.getItemIds()));
-				max = Math.max(max, maxOverride(branch.getStaffIds()));
-				max = Math.max(max, maxOverride(branch.getOffhandIds()));
+				max = Math.max(max, maxOverride(branch.getItemIds(), itemThresholdOverrides));
+				max = Math.max(max, maxOverride(branch.getStaffIds(), itemThresholdOverrides));
+				max = Math.max(max, maxOverride(branch.getOffhandIds(), itemThresholdOverrides));
 			}
 		}
 		return max;
 	}
 
-	private int maxOverride(int[] ids)
+	private static int maxOverride(int[] ids, Map<Integer, Integer> itemThresholdOverrides)
 	{
 		int max = 0;
 		if (ids != null)
@@ -857,7 +866,7 @@ public class PathfinderConfig
 
 	/**
 	 * What a search of this refresh that can't reach its target may suggest unlocking. It captures
-	 * this refresh's requirements, so it may run on the pathfinding thread; {@code null} before the
+	 * this refresh's requirements and transport costs, so it may run on the pathfinding thread; {@code null} before the
 	 * first refresh. {@code targetsNeedBank} as for {@link #prepareAStarRoutingAccount(boolean, boolean)}.
 	 */
 	public UnlockSuggestions unlockSuggestions(boolean targetsNeedBank)
@@ -871,9 +880,15 @@ public class PathfinderConfig
 		boolean bankPath = includeBankPath || targetsNeedBank;
 		Set<Integer> banks = accessibleBankTiles;
 		int visitCost = bankVisitCost;
+		// The costs too are read here, on the client thread: the compile runs on the pathfinding
+		// thread, where the next refresh may be rewriting them.
+		int[] costs = typeCosts.clone();
+		int consumableCost = costConsumableTeleportationItems;
+		Map<Integer, Integer> thresholdOverrides = itemThresholdOverrides;
 		Function<TransportAvailabilities, PreparedRoutingAccount> compile = availabilities -> PreparedRoutingAccount.compile(
 			availabilities.withoutBank, availabilities.withBank, bankPath, banks, visitCost, true,
-			this::getAdditionalTransportCost);
+			transport -> additionalTransportCost(transport, type -> costs[type.ordinal()], consumableCost,
+				thresholdOverrides));
 		// Items don't close an obtainable transport, so one view holds them all.
 		return new UnlockSuggestions(current, unlockBudgetNanos(),
 			granted -> compile.apply(availabilities(transports, granted)), () -> availabilities(transports, current.eligibility(), current::obtainable,
