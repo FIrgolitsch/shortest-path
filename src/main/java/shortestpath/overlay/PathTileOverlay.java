@@ -716,13 +716,6 @@ public class PathTileOverlay extends Overlay
 		Rectangle2D textBounds = graphics.getFontMetrics().getStringBounds(text, graphics);
 		double height = textBounds.getHeight();
 		int x = (int) (point.getX() - textBounds.getWidth() / 2);
-		// Kept inside the viewport, so a label by its edge isn't cut off.
-		int left = client.getViewportXOffset() + LABEL_MARGIN;
-		int right = client.getViewportXOffset() + client.getViewportWidth() - LABEL_MARGIN;
-		if (right > left)
-		{
-			x = Math.max(left, Math.min(x, right - (int) textBounds.getWidth()));
-		}
 		int y = (int) (point.getY() - height) - verticalOffset;
 		graphics.setColor(Color.BLACK);
 		graphics.drawString(text, x + 1, y + 1);
