@@ -846,25 +846,6 @@ public class PathfinderConfig
 	}
 
 	/**
-	 * Every capability that would open some transport this refresh locks: the most a search of
-	 * this refresh could suggest. For checking the suggestions; {@code null} before the first refresh.
-	 */
-	public Set<Capability> everyCapability()
-	{
-		Requirements current = requirements;
-		if (current == null)
-		{
-			return null;
-		}
-		Set<Capability> capabilities = new LinkedHashSet<>();
-		for (Transport transport : allTransports)
-		{
-			capabilities.addAll(current.capabilities(transport));
-		}
-		return capabilities;
-	}
-
-	/**
 	 * What a search of this refresh that can't reach its target may suggest unlocking. It captures
 	 * this refresh's requirements and transport costs, so it may run on the pathfinding thread; {@code null} before the
 	 * first refresh. {@code targetsNeedBank} as for {@link #prepareAStarRoutingAccount(boolean, boolean)}.
