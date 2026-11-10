@@ -324,6 +324,12 @@ public final class UnlockSuggestions
 			Arrays.sort(origins);
 			for (int origin : origins)
 			{
+				// A site index below zero means anywhere, so an origin the static data doesn't know must
+				// fail loudly, as it does in SiteGraph, rather than turn the transport into a teleport.
+				if (stat.siteIndex(origin) < 0)
+				{
+					throw new IllegalStateException("local origin is not a static site: " + Integer.toUnsignedString(origin));
+				}
 				for (Transport transport : local.get(origin))
 				{
 					add(stat.siteIndex(origin), stat.siteIndex(transport.getDestination()), transport,

@@ -139,7 +139,7 @@ public class PathAnnotator
 			// Items already in the bank read as a reminder to bring them.
 			unlockText = suggestion == null ? null
 				: describe(suggestion.getCapability(), this::itemName, suggestion.getEffort() == Capability.Effort.OWNED_ITEMS)
-					+ " to use: " + suggestion.getTransports().stream().map(PathAnnotator::transportLabel).distinct()
+					+ " to use: " + suggestion.getTransports().stream().map(this::transportLabel).distinct()
 						.collect(Collectors.joining(", "));
 		}
 		return unlockText;
@@ -190,11 +190,12 @@ public class PathAnnotator
 	}
 
 	/** "Ship Aldarin", "Quetzal Aldarin", "Open Gate" */
-	private static String transportLabel(Transport transport)
+	private String transportLabel(Transport transport)
 	{
 		String type = transport.getType().name().replace('_', ' ').toLowerCase();
 		type = Character.toUpperCase(type.charAt(0)) + type.substring(1);
-		return transport.getDisplayInfo() != null ? type + " " + transport.getDisplayInfo()
+		String info = formatTransportDisplay(transport);
+		return info != null ? type + " " + info
 			: transport.getObjectInfo() != null ? transport.getObjectInfo().replaceAll(" \\d+$", "") : type;
 	}
 

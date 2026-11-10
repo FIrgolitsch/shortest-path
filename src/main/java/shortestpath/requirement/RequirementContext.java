@@ -107,7 +107,8 @@ public final class RequirementContext
 		this.boostedSkillLevelsAndMore = skillLevels;
 		this.currentMaxQuestPoints = base.currentMaxQuestPoints;
 		this.currentMaxMusicTracks = base.currentMaxMusicTracks;
-		this.questStates = Map.copyOf(questStates);
+		// granting hands over a map of its own, so it is wrapped rather than copied again.
+		this.questStates = Collections.unmodifiableMap(questStates);
 		this.varbitValues = base.varbitValues;
 		this.varPlayerValues = base.varPlayerValues;
 		this.eligibility = eligibility;
