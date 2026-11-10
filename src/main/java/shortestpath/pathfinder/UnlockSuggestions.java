@@ -43,11 +43,6 @@ public final class UnlockSuggestions
 	static final long BUDGET_NANOS = 600_000_000L;
 	/** A rerun stopped at the deadline takes a moment to return, so it is stopped this much early. */
 	private static final long WIND_DOWN_NANOS = 10_000_000L;
-	/**
-	 * Stretches the budget. Tests that check what is found, rather than how fast, raise it so a busy
-	 * machine can't change the answer.
-	 */
-	static int timeScale = 1;
 	/** The heuristic weight of the rerun's second, greedier search. */
 	private static final double QUICK_WEIGHT = 3.0;
 
@@ -112,18 +107,21 @@ public final class UnlockSuggestions
 	}
 
 	private final Requirements requirements;
+	private final long budgetNanos;
 	private final Function<Requirements, PreparedRoutingAccount> accountWith;
 	private final Supplier<TransportAvailability> obtainable;
 
 	/**
+	 * @param budgetNanos how long a look may take, {@link #BUDGET_NANOS} but in tests
 	 * @param accountWith the routing account the player would have under other requirements
 	 * @param obtainable every transport no setting or world restriction closes, each fairy ring
 	 * wrapped once as the requirements see it
 	 */
-	UnlockSuggestions(Requirements requirements, Function<Requirements, PreparedRoutingAccount> accountWith,
-		Supplier<TransportAvailability> obtainable)
+	UnlockSuggestions(Requirements requirements, long budgetNanos,
+		Function<Requirements, PreparedRoutingAccount> accountWith, Supplier<TransportAvailability> obtainable)
 	{
 		this.requirements = requirements;
+		this.budgetNanos = budgetNanos;
 		this.accountWith = accountWith;
 		this.obtainable = obtainable;
 	}
@@ -132,7 +130,7 @@ public final class UnlockSuggestions
 		SearchRestrictions restrictions, double heuristicWeight, BooleanSupplier cancelled)
 	{
 		long started = System.nanoTime();
-		long deadline = started + (BUDGET_NANOS - WIND_DOWN_NANOS) * timeScale;
+		long deadline = started + budgetNanos - WIND_DOWN_NANOS;
 		BooleanSupplier stop = () -> cancelled.getAsBoolean() || System.nanoTime() > deadline;
 		int[] targets = goals.tiles().stream().mapToInt(Integer::intValue).toArray();
 		ComponentGraph graph = new ComponentGraph(stat, obtainable.get());

@@ -875,9 +875,18 @@ public class PathfinderConfig
 			availabilities.withoutBank, availabilities.withBank, bankPath, banks, visitCost, true,
 			this::getAdditionalTransportCost);
 		// Items don't close an obtainable transport, so one view holds them all.
-		return new UnlockSuggestions(current, granted -> compile.apply(availabilities(transports, granted)),
-			() -> availabilities(transports, current.eligibility(), current::obtainable,
+		return new UnlockSuggestions(current, unlockBudgetNanos(),
+			granted -> compile.apply(availabilities(transports, granted)), () -> availabilities(transports, current.eligibility(), current::obtainable,
 				(offered, banked) -> banked == BankVisitState.CARRIED).withoutBank);
+	}
+
+	/**
+	 * How long a look for unlocks may take. Tests that check what is found, rather than how fast,
+	 * stretch it so a busy machine can't change the answer.
+	 */
+	long unlockBudgetNanos()
+	{
+		return UnlockSuggestions.BUDGET_NANOS;
 	}
 
 	public boolean avoidWilderness(int packedPosition, int packedNeighborPosition, boolean targetInWilderness)

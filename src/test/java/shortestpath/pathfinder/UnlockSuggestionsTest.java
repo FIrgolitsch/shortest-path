@@ -27,7 +27,6 @@ import net.runelite.api.gameval.DBTableID;
 import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.gameval.ItemID;
 import net.runelite.api.gameval.VarbitID;
-import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -61,6 +60,8 @@ public class UnlockSuggestionsTest
 	ItemContainer inventory;
 	private final TestShortestPathConfig config = new TestShortestPathConfig();
 	private PathfinderConfig pathfinderConfig;
+	/** What is found shouldn't depend on how busy the machine is; the budget test sets it back. */
+	private long budget = 10 * UnlockSuggestions.BUDGET_NANOS;
 
 	@BeforeClass
 	public static void buildRoutingStatic()
@@ -78,14 +79,19 @@ public class UnlockSuggestionsTest
 		when(client.getClientThread()).thenReturn(Thread.currentThread());
 		when(client.getGameState()).thenReturn(GameState.LOGGED_IN);
 		doReturn(inventory).when(client).getItemContainer(InventoryID.INV);
-		// What is found shouldn't depend on how busy the machine is; the budget test sets it back.
-		UnlockSuggestions.timeScale = 10;
 	}
 
-	@After
-	public void after()
+	/** A config whose look for unlocks may take {@link #budget}. */
+	private PathfinderConfig newConfig()
 	{
-		UnlockSuggestions.timeScale = 1;
+		return new TestPathfinderConfig(client, config, QuestState.NOT_STARTED, true, true)
+		{
+			@Override
+			long unlockBudgetNanos()
+			{
+				return budget;
+			}
+		};
 	}
 
 	/** An account with no quests done, every skill at {@code level}, carrying {@code items}. */
@@ -93,7 +99,7 @@ public class UnlockSuggestionsTest
 	{
 		when(client.getBoostedSkillLevel(any(Skill.class))).thenReturn(level);
 		doReturn(items).when(inventory).getItems();
-		pathfinderConfig = new TestPathfinderConfig(client, config, QuestState.NOT_STARTED, true, true);
+		pathfinderConfig = newConfig();
 		pathfinderConfig.refresh();
 	}
 
@@ -141,7 +147,7 @@ public class UnlockSuggestionsTest
 		config.set("useShips", true);
 		when(client.getBoostedSkillLevel(any(Skill.class))).thenReturn(99);
 		doReturn(new Item[0]).when(inventory).getItems();
-		pathfinderConfig = new TestPathfinderConfig(client, config, QuestState.NOT_STARTED, true, true);
+		pathfinderConfig = newConfig();
 		pathfinderConfig.setItemStateService(itemState);
 		pathfinderConfig.refresh();
 
@@ -211,7 +217,7 @@ public class UnlockSuggestionsTest
 	public void aLookOutOfTimeStopsBetweenStages()
 	{
 		// With no budget at all it stops once the component graph is built, before weighing anything.
-		UnlockSuggestions.timeScale = 0;
+		budget = 0;
 		AStarPathfinder search = aldarinSearch(done -> { });
 		search.run();
 		search.findUnlockSuggestions();
@@ -320,7 +326,7 @@ public class UnlockSuggestionsTest
 	public void suggestionsStayWithinOneTickOnLongRoutes()
 	{
 		// A level 1 account has the most locked transports to weigh.
-		UnlockSuggestions.timeScale = 1;
+		budget = UnlockSuggestions.BUDGET_NANOS;
 		setup(1);
 		for (int target : new int[] {ALDARIN, WorldPointUtil.packWorldPoint(2932, 2936, 0),
 			WorldPointUtil.packWorldPoint(2795, 2940, 0), WorldPointUtil.packWorldPoint(1388, 9313, 0)})
