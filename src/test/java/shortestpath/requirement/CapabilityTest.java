@@ -134,18 +134,6 @@ public class CapabilityTest
 	}
 
 	@Test
-	public void describeNamesEveryPart()
-	{
-		assertEquals("Carry 20 Coins", Capability.items(Map.of(ItemID.COINS, 20)).describe(id -> "Coins", false));
-		assertEquals("Bring 20 Coins from your bank", Capability.items(Map.of(ItemID.COINS, 20)).describe(id -> "Coins", true));
-		assertEquals("Carry Bronze axe and Machete", Capability.items(Map.of(ItemID.BRONZE_AXE, 1, ItemID.MACHETTE, 1))
-			.describe(id -> id == ItemID.BRONZE_AXE ? "Bronze axe" : "Machete", false));
-		assertEquals("Complete Song of the Elves, reach 70 Agility and 70 Construction",
-			Capability.of(Set.of(Quest.SONG_OF_THE_ELVES), levels(Skill.AGILITY, 70, Skill.CONSTRUCTION, 70), Map.of())
-				.describe(id -> "?", false));
-	}
-
-	@Test
 	public void theMusicCapeAsksForEveryTrack()
 	{
 		// As for the Music cape teleport, whose row needs "Max Music".
@@ -159,7 +147,7 @@ public class CapabilityTest
 
 		Capability tracks = requirements.capabilities(cape).get(0);
 
-		assertEquals("Reach 750 music tracks", tracks.describe(id -> "?", false));
+		assertEquals(750, tracks.getSkillLevels().get(SkillLevels.MUSIC_TRACKS_INDEX));
 		assertEquals(Capability.Effort.MAJOR, requirements.effort(tracks));
 	}
 }

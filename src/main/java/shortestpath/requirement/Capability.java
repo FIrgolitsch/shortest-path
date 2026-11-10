@@ -1,23 +1,18 @@
 package shortestpath.requirement;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.IntFunction;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import net.runelite.api.Quest;
-import net.runelite.api.Skill;
 import shortestpath.requirement.model.SkillLevels;
 
 /**
  * What the player could get to open a locked transport: quests to finish, skill levels to reach
- * and items to carry, in any mix. Bundles combine with {@link #union} and read as one line through
- * {@link #describe}. What one is worth depends on
- * the player, so {@link Requirements#effortUnits} weighs them and
+ * and items to carry, in any mix. Bundles combine with {@link #union}. What one is worth depends on the
+ * player, so {@link Requirements#effortUnits} weighs them and
  * {@link RequirementContext#granting} applies them.
  */
 @Getter
@@ -84,48 +79,5 @@ public final class Capability
 		Map<Integer, Integer> allItems = new HashMap<>(items);
 		other.items.forEach((id, quantity) -> allItems.merge(id, quantity, Math::max));
 		return of(allQuests, SkillLevels.merge(skillLevels, other.skillLevels), allItems);
-	}
-
-	/**
-	 * One line naming what to get: "Complete Twilight's Promise", "Reach 60 Agility",
-	 * "Carry 20 Coins", "Complete Song of the Elves, reach 70 Agility and 70 Construction", or
-	 * "Bring 20 Coins from your bank" for items the player has there.
-	 */
-	public String describe(IntFunction<String> itemName, boolean inBank)
-	{
-		List<String> clauses = new ArrayList<>();
-		List<String> names = new ArrayList<>();
-		quests.forEach(quest -> names.add(quest.getName()));
-		clause(clauses, "complete ", names);
-		for (int i = 0; i < SkillLevels.LENGTH; i++)
-		{
-			int level = skillLevels.get(i);
-			if (level > 0)
-			{
-				names.add(i == SkillLevels.TOTAL_LEVEL_INDEX ? "total level " + level
-					: i == SkillLevels.COMBAT_LEVEL_INDEX ? "combat level " + level
-					: i == SkillLevels.QUEST_POINTS_INDEX ? level + " quest points"
-					: i == SkillLevels.MUSIC_TRACKS_INDEX ? level + " music tracks"
-					: level + " " + Skill.values()[i].getName());
-			}
-		}
-		clause(clauses, "reach ", names);
-		items.forEach((id, quantity) -> names.add(quantity > 1 ? quantity + " " + itemName.apply(id) : itemName.apply(id)));
-		clause(clauses, inBank ? "bring " : "carry ", names);
-		String line = String.join(", ", clauses) + (inBank && !items.isEmpty() ? " from your bank" : "");
-		return line.isEmpty() ? line : Character.toUpperCase(line.charAt(0)) + line.substring(1);
-	}
-
-	/** Adds "verb a, b and c" for {@code names}, sorted, and clears them. */
-	private static void clause(List<String> clauses, String verb, List<String> names)
-	{
-		if (names.isEmpty())
-		{
-			return;
-		}
-		names.sort(null);
-		String last = names.remove(names.size() - 1);
-		clauses.add(verb + (names.isEmpty() ? last : String.join(", ", names) + " and " + last));
-		names.clear();
 	}
 }

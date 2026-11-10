@@ -1,6 +1,7 @@
 package shortestpath.presentation;
 
 import java.util.*;
+import java.util.function.IntFunction;
 import java.util.stream.Collectors;
 
 import javax.inject.*;
@@ -18,6 +19,7 @@ import shortestpath.poh.PohService;
 import shortestpath.presentation.BankPickupRequirements.BankPickupResult;
 import shortestpath.requirement.TransportEligibility;
 import shortestpath.requirement.model.ItemRequirement;
+import shortestpath.requirement.model.SkillLevels;
 import shortestpath.requirement.Capability;
 import shortestpath.transport.*;
 
@@ -136,11 +138,55 @@ public class PathAnnotator
 			unlockSource = suggestion;
 			// Items already in the bank read as a reminder to bring them.
 			unlockText = suggestion == null ? null
-				: suggestion.getCapability().describe(this::itemName, suggestion.getEffort() == Capability.Effort.OWNED_ITEMS)
+				: describe(suggestion.getCapability(), this::itemName, suggestion.getEffort() == Capability.Effort.OWNED_ITEMS)
 					+ " to use: " + suggestion.getTransports().stream().map(PathAnnotator::transportLabel).distinct()
 						.collect(Collectors.joining(", "));
 		}
 		return unlockText;
+	}
+
+	/**
+	 * One line naming what {@code capability} asks to get: "Complete Twilight's Promise", "Reach 60
+	 * Agility", "Carry 20 Coins", "Complete Song of the Elves, reach 70 Agility and 70 Construction",
+	 * or "Bring 20 Coins from your bank" for items the player has there.
+	 */
+	static String describe(Capability capability, IntFunction<String> itemName, boolean inBank)
+	{
+		List<String> clauses = new ArrayList<>();
+		List<String> names = new ArrayList<>();
+		capability.getQuests().forEach(quest -> names.add(quest.getName()));
+		clause(clauses, "complete ", names);
+		for (int i = 0; i < SkillLevels.LENGTH; i++)
+		{
+			int level = capability.getSkillLevels().get(i);
+			if (level > 0)
+			{
+				names.add(i == SkillLevels.TOTAL_LEVEL_INDEX ? "total level " + level
+					: i == SkillLevels.COMBAT_LEVEL_INDEX ? "combat level " + level
+					: i == SkillLevels.QUEST_POINTS_INDEX ? level + " quest points"
+					: i == SkillLevels.MUSIC_TRACKS_INDEX ? level + " music tracks"
+					: level + " " + Skill.values()[i].getName());
+			}
+		}
+		clause(clauses, "reach ", names);
+		capability.getItems().forEach((id, quantity) ->
+			names.add(quantity > 1 ? quantity + " " + itemName.apply(id) : itemName.apply(id)));
+		clause(clauses, inBank ? "bring " : "carry ", names);
+		String line = String.join(", ", clauses) + (inBank && !capability.getItems().isEmpty() ? " from your bank" : "");
+		return line.isEmpty() ? line : Character.toUpperCase(line.charAt(0)) + line.substring(1);
+	}
+
+	/** Adds "verb a, b and c" for {@code names}, sorted, and clears them. */
+	private static void clause(List<String> clauses, String verb, List<String> names)
+	{
+		if (names.isEmpty())
+		{
+			return;
+		}
+		names.sort(null);
+		String last = names.remove(names.size() - 1);
+		clauses.add(verb + (names.isEmpty() ? last : String.join(", ", names) + " and " + last));
+		names.clear();
 	}
 
 	/** "Ship Aldarin", "Quetzal Aldarin", "Open Gate" */

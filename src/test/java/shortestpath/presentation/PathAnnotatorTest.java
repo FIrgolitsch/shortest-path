@@ -15,6 +15,10 @@ import java.util.Set;
 import org.junit.Before;
 import org.junit.Test;
 
+import net.runelite.api.Quest;
+import net.runelite.api.Skill;
+import net.runelite.api.gameval.ItemID;
+
 import net.runelite.api.ItemContainer;
 
 import shortestpath.PrimitiveIntHashMap;
@@ -28,7 +32,9 @@ import shortestpath.pathfinder.PathfinderConfig;
 import shortestpath.poh.PohService;
 import shortestpath.poh.PohTestServices;
 import shortestpath.presentation.BankPickupRequirements.BankPickupResult;
+import shortestpath.requirement.Capability;
 import shortestpath.requirement.TransportEligibility;
+import shortestpath.requirement.model.SkillLevels;
 import shortestpath.transport.Transport;
 import shortestpath.transport.TransportType;
 
@@ -323,5 +329,27 @@ public class PathAnnotatorTest
 		assertEquals(Set.of(954), result.bankItemIds);
 		assertEquals("the raw pickup map is formatted into a phrase",
 			List.of("1 Unknown item"), result.phrases);
+	}
+
+	@Test
+	public void anUnlockReadsAsOneLineNamingEveryPart()
+	{
+		assertEquals("Carry 20 Coins",
+			PathAnnotator.describe(Capability.items(Map.of(ItemID.COINS, 20)), id -> "Coins", false));
+		assertEquals("Bring 20 Coins from your bank",
+			PathAnnotator.describe(Capability.items(Map.of(ItemID.COINS, 20)), id -> "Coins", true));
+		assertEquals("Carry Bronze axe and Machete",
+			PathAnnotator.describe(Capability.items(Map.of(ItemID.BRONZE_AXE, 1, ItemID.MACHETTE, 1)),
+				id -> id == ItemID.BRONZE_AXE ? "Bronze axe" : "Machete", false));
+		int[] levels = new int[SkillLevels.LENGTH];
+		levels[Skill.AGILITY.ordinal()] = 70;
+		levels[Skill.CONSTRUCTION.ordinal()] = 70;
+		assertEquals("Complete Song of the Elves, reach 70 Agility and 70 Construction",
+			PathAnnotator.describe(Capability.of(Set.of(Quest.SONG_OF_THE_ELVES), SkillLevels.of(levels), Map.of()),
+				id -> "?", false));
+		int[] tracks = new int[SkillLevels.LENGTH];
+		tracks[SkillLevels.MUSIC_TRACKS_INDEX] = 750;
+		assertEquals("Reach 750 music tracks",
+			PathAnnotator.describe(Capability.of(Set.of(), SkillLevels.of(tracks), Map.of()), id -> "?", false));
 	}
 }
