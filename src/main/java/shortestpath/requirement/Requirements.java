@@ -1,7 +1,6 @@
 package shortestpath.requirement;
 
 import java.util.*;
-import java.util.function.BiFunction;
 
 import net.runelite.api.*;
 import net.runelite.api.gameval.ItemID;
@@ -86,7 +85,10 @@ public final class Requirements
 	 */
 	public boolean obtainable(Transport transport)
 	{
-		return passes(transport, Kind.SETTING);
+		return sailing(transport) == RejectionReason.NONE && pohDisabled(transport) == RejectionReason.NONE
+			&& leagueRegion(transport) == RejectionReason.NONE && typeDisabled(transport) == RejectionReason.NONE
+			&& pohVariant(transport) == RejectionReason.NONE && teleportationItem(transport) == RejectionReason.NONE
+			&& jewelleryBoxTier(transport) == RejectionReason.NONE;
 	}
 
 	/**
@@ -98,20 +100,26 @@ public final class Requirements
 	 */
 	public List<Capability> capabilities(Transport transport)
 	{
-		if (!passes(transport, Kind.SETTING) || !passes(transport, Kind.UNHANDLED))
+		if (!obtainable(transport))
 		{
 			return List.of();
 		}
 		Capability progress = Capability.of(missingQuests(transport), missingLevels(transport), Map.of());
+		List<Capability> alternatives = new ArrayList<>();
 		if (itemRequirement(transport) == RejectionReason.NONE)
 		{
-			return progress.isEmpty() ? List.of() : List.of(progress);
+			alternatives.add(progress);
 		}
-		List<Capability> alternatives = new ArrayList<>();
-		for (Map<Integer, Integer> carry : context.getEligibility().missingItems(transport))
+		else
 		{
-			alternatives.add(progress.plus(Capability.items(carry)));
+			for (Map<Integer, Integer> carry : context.getEligibility().missingItems(transport))
+			{
+				alternatives.add(progress.plus(Capability.items(carry)));
+			}
 		}
+		// Granting quests, levels and items leaves a var, a declared unlock, the respawn or a planted
+		// spirit tree closed, so only the alternatives that really open the transport are kept.
+		alternatives.removeIf(capability -> capability.isEmpty() || !granting(capability).usable(transport));
 		return alternatives;
 	}
 
@@ -272,75 +280,22 @@ public final class Requirements
 	 */
 	public RejectionReason gates(Transport transport)
 	{
-		for (Gate gate : GATES)
-		{
-			if (gate == Gate.ITEM_REQUIREMENT)
-			{
-				continue;
-			}
-			RejectionReason reason = gate.test.apply(this, transport);
-			if (reason != RejectionReason.NONE)
-			{
-				return reason;
-			}
-		}
-		return RejectionReason.NONE;
+		RejectionReason reason = sailing(transport);
+		if (reason == RejectionReason.NONE) reason = pohDisabled(transport);
+		if (reason == RejectionReason.NONE) reason = leagueRegion(transport);
+		if (reason == RejectionReason.NONE) reason = typeDisabled(transport);
+		if (reason == RejectionReason.NONE) reason = pohVariant(transport);
+		if (reason == RejectionReason.NONE) reason = teleportationItem(transport);
+		if (reason == RejectionReason.NONE) reason = respawn(transport);
+		if (reason == RejectionReason.NONE) reason = unlockGate(transport);
+		if (reason == RejectionReason.NONE) reason = jewelleryBoxTier(transport);
+		if (reason == RejectionReason.NONE) reason = skillLevel(transport);
+		if (reason == RejectionReason.NONE) reason = quest(transport);
+		if (reason == RejectionReason.NONE) reason = varbit(transport);
+		if (reason == RejectionReason.NONE) reason = varplayer(transport);
+		if (reason == RejectionReason.NONE) reason = plantedSpiritTree(transport);
+		return reason;
 	}
-
-	/** Whether every gate of {@code kind} passes. */
-	private boolean passes(Transport transport, Kind kind)
-	{
-		for (Gate gate : GATES)
-		{
-			if (gate.kind == kind && gate.test.apply(this, transport) != RejectionReason.NONE)
-			{
-				return false;
-			}
-		}
-		return true;
-	}
-
-	/** What the suggestions can do about a gate that closes a transport. */
-	private enum Kind
-	{
-		/** Decided by a setting, the world type or a league region: never suggested. */
-		SETTING,
-		/** The player's own progress a {@link Capability} names: quests, skill levels, items. */
-		UNLOCKABLE,
-		/** Progress no {@link Capability} names yet, such as vars and declared unlocks. */
-		UNHANDLED
-	}
-
-	/** The gates in the order {@link #check} runs them, each tagged with what can open it. */
-	private enum Gate
-	{
-		SAILING(Kind.SETTING, Requirements::sailing),
-		POH_DISABLED(Kind.SETTING, Requirements::pohDisabled),
-		LEAGUE_REGION(Kind.SETTING, Requirements::leagueRegion),
-		TYPE_DISABLED(Kind.SETTING, Requirements::typeDisabled),
-		POH_VARIANT(Kind.SETTING, Requirements::pohVariant),
-		TELEPORTATION_ITEM(Kind.SETTING, Requirements::teleportationItem),
-		RESPAWN(Kind.UNHANDLED, Requirements::respawn),
-		UNLOCK_GATE(Kind.UNHANDLED, Requirements::unlockGate),
-		JEWELLERY_BOX_TIER(Kind.SETTING, Requirements::jewelleryBoxTier),
-		SKILL_LEVEL(Kind.UNLOCKABLE, Requirements::skillLevel),
-		QUEST(Kind.UNLOCKABLE, Requirements::quest),
-		VARBIT(Kind.UNHANDLED, Requirements::varbit),
-		VARPLAYER(Kind.UNHANDLED, Requirements::varplayer),
-		PLANTED_SPIRIT_TREE(Kind.UNHANDLED, Requirements::plantedSpiritTree),
-		ITEM_REQUIREMENT(Kind.UNLOCKABLE, Requirements::itemRequirement);
-
-		private final Kind kind;
-		private final BiFunction<Requirements, Transport, RejectionReason> test;
-
-		Gate(Kind kind, BiFunction<Requirements, Transport, RejectionReason> test)
-		{
-			this.kind = kind;
-			this.test = test;
-		}
-	}
-
-	private static final Gate[] GATES = Gate.values();
 
 	/**
 	 * Bank-destination admissibility: a {@link DestinationRequirements} is
