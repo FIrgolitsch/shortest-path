@@ -1,7 +1,6 @@
 package shortestpath.requirement;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import java.util.Arrays;
@@ -53,6 +52,16 @@ public class CapabilityTest
 		return SkillLevels.of(levels);
 	}
 
+	private static Capability quests(Set<Quest> quests)
+	{
+		return Capability.of(quests, SkillLevels.NONE, Map.of());
+	}
+
+	private static Capability skills(SkillLevels levels)
+	{
+		return Capability.of(Set.of(), levels, Map.of());
+	}
+
 	private static TransportItems carry(int itemId)
 	{
 		return new TransportItems(List.of(new ItemRequirement(new int[] {itemId}, null, null, 1)));
@@ -96,9 +105,9 @@ public class CapabilityTest
 		Requirements novice = novice();
 		Capability coins = Capability.items(Map.of(ItemID.COINS, 20));
 		Capability rope = Capability.items(Map.of(ItemID.ROPE, 1));
-		Capability quest = Capability.quests(Set.of(Quest.THE_FREMENNIK_TRIALS));
-		Capability agility = Capability.skills(levels(Skill.AGILITY, 2));
-		Capability maxed = Capability.skills(levels(Skill.AGILITY, 99));
+		Capability quest = quests(Set.of(Quest.THE_FREMENNIK_TRIALS));
+		Capability agility = skills(levels(Skill.AGILITY, 2));
+		Capability maxed = skills(levels(Skill.AGILITY, 99));
 
 		assertEquals(Capability.Effort.CURRENCY, novice.effort(coins));
 		assertEquals(Capability.Effort.ITEMS, novice.effort(rope));
@@ -114,8 +123,8 @@ public class CapabilityTest
 	@Test
 	public void unionAsksForEachRequirementOnce()
 	{
-		Capability fare = Capability.quests(Set.of(Quest.THE_FREMENNIK_TRIALS)).plus(Capability.items(Map.of(ItemID.COINS, 20)));
-		Capability climb = Capability.items(Map.of(ItemID.COINS, 30)).plus(Capability.skills(levels(Skill.AGILITY, 50)));
+		Capability fare = quests(Set.of(Quest.THE_FREMENNIK_TRIALS)).plus(Capability.items(Map.of(ItemID.COINS, 20)));
+		Capability climb = Capability.items(Map.of(ItemID.COINS, 30)).plus(skills(levels(Skill.AGILITY, 50)));
 
 		Capability both = fare.union(climb).union(fare);
 
@@ -127,13 +136,13 @@ public class CapabilityTest
 	@Test
 	public void describeNamesEveryPart()
 	{
-		assertEquals("Carry 20 Coins", Capability.items(Map.of(ItemID.COINS, 20)).describe(id -> "Coins"));
+		assertEquals("Carry 20 Coins", Capability.items(Map.of(ItemID.COINS, 20)).describe(id -> "Coins", false));
 		assertEquals("Bring 20 Coins from your bank", Capability.items(Map.of(ItemID.COINS, 20)).describe(id -> "Coins", true));
 		assertEquals("Carry Bronze axe and Machete", Capability.items(Map.of(ItemID.BRONZE_AXE, 1, ItemID.MACHETTE, 1))
-			.describe(id -> id == ItemID.BRONZE_AXE ? "Bronze axe" : "Machete"));
+			.describe(id -> id == ItemID.BRONZE_AXE ? "Bronze axe" : "Machete", false));
 		assertEquals("Complete Song of the Elves, reach 70 Agility and 70 Construction",
 			Capability.of(Set.of(Quest.SONG_OF_THE_ELVES), levels(Skill.AGILITY, 70, Skill.CONSTRUCTION, 70), Map.of())
-				.describe(id -> "?"));
+				.describe(id -> "?", false));
 	}
 
 	@Test
@@ -150,23 +159,20 @@ public class CapabilityTest
 
 		Capability tracks = requirements.capabilities(cape).get(0);
 
-		assertEquals("Reach 750 music tracks", tracks.describe(id -> "?"));
+		assertEquals("Reach 750 music tracks", tracks.describe(id -> "?", false));
 		assertEquals(Capability.Effort.MAJOR, requirements.effort(tracks));
 	}
 
 	@Test
 	public void plusNeedsEverythingEitherNeeds()
 	{
-		Capability fare = Capability.quests(Set.of(Quest.THE_FREMENNIK_TRIALS)).plus(Capability.items(Map.of(ItemID.COINS, 20)));
-		Capability climb = Capability.items(Map.of(ItemID.COINS, 30)).plus(Capability.skills(levels(Skill.AGILITY, 50)));
+		Capability fare = quests(Set.of(Quest.THE_FREMENNIK_TRIALS)).plus(Capability.items(Map.of(ItemID.COINS, 20)));
+		Capability climb = Capability.items(Map.of(ItemID.COINS, 30)).plus(skills(levels(Skill.AGILITY, 50)));
 
 		Capability both = fare.plus(climb);
 
 		assertEquals(Set.of(Quest.THE_FREMENNIK_TRIALS), both.getQuests());
 		assertEquals(Map.of(ItemID.COINS, 50), both.getItems());
 		assertEquals(50, both.getSkillLevels().get(Skill.AGILITY));
-		assertTrue(both.covers(fare));
-		assertTrue(both.covers(climb));
-		assertFalse(fare.covers(both));
 	}
 }

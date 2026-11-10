@@ -236,7 +236,7 @@ public class UnlockSuggestionsTest
 
 		UnlockSuggestions.Suggestion suggestion = search(SUNSET_COAST, ALDARIN).getUnlockSuggestion().get();
 
-		assertEquals(Capability.quests(Set.of(Quest.TWILIGHTS_PROMISE)), suggestion.getCapability());
+		assertEquals(Capability.of(Set.of(Quest.TWILIGHTS_PROMISE), SkillLevels.NONE, Map.of()), suggestion.getCapability());
 		assertEquals(Capability.Effort.PROGRESS, suggestion.getEffort());
 		assertTrue(suggestion.getTransports().stream().allMatch(transport -> transport.getType() == TransportType.QUETZAL));
 	}

@@ -15,8 +15,8 @@ import shortestpath.requirement.model.SkillLevels;
 
 /**
  * What the player could get to open a locked transport: quests to finish, skill levels to reach
- * and items to carry, in any mix. Bundles combine with {@link #plus}, compare with
- * {@link #covers} and read as one line through {@link #describe}. What one is worth depends on
+ * and items to carry, in any mix. Bundles combine with {@link #plus} and read as one line through
+ * {@link #describe}. What one is worth depends on
  * the player, so {@link Requirements#effortUnits} weighs them and
  * {@link RequirementContext#granting} applies them.
  */
@@ -62,16 +62,6 @@ public final class Capability
 		return new Capability(quests, skillLevels, items);
 	}
 
-	public static Capability quests(Set<Quest> quests)
-	{
-		return of(quests, SkillLevels.NONE, Map.of());
-	}
-
-	public static Capability skills(SkillLevels levels)
-	{
-		return of(Set.of(), levels, Map.of());
-	}
-
 	public static Capability items(Map<Integer, Integer> items)
 	{
 		return of(Set.of(), SkillLevels.NONE, items);
@@ -106,40 +96,11 @@ public final class Capability
 		return of(allQuests, SkillLevels.merge(skillLevels, other.skillLevels), allItems);
 	}
 
-	/** Whether having this capability also gives the player {@code other}. */
-	public boolean covers(Capability other)
-	{
-		if (!quests.containsAll(other.quests))
-		{
-			return false;
-		}
-		for (Map.Entry<Integer, Integer> item : other.items.entrySet())
-		{
-			if (items.getOrDefault(item.getKey(), 0) < item.getValue())
-			{
-				return false;
-			}
-		}
-		for (int i = 0; i < SkillLevels.LENGTH; i++)
-		{
-			if (skillLevels.get(i) < other.skillLevels.get(i))
-			{
-				return false;
-			}
-		}
-		return true;
-	}
-
 	/**
 	 * One line naming what to get: "Complete Twilight's Promise", "Reach 60 Agility",
-	 * "Carry 20 Coins", "Complete Song of the Elves, reach 70 Agility and 70 Construction".
+	 * "Carry 20 Coins", "Complete Song of the Elves, reach 70 Agility and 70 Construction", or
+	 * "Bring 20 Coins from your bank" for items the player has there.
 	 */
-	public String describe(IntFunction<String> itemName)
-	{
-		return describe(itemName, false);
-	}
-
-	/** As {@link #describe(IntFunction)}, or "Bring 20 Coins from your bank" for items the player has there. */
 	public String describe(IntFunction<String> itemName, boolean inBank)
 	{
 		List<String> clauses = new ArrayList<>();
