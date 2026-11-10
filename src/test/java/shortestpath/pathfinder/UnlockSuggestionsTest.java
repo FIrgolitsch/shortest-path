@@ -3,6 +3,7 @@ package shortestpath.pathfinder;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doReturn;
@@ -37,7 +38,7 @@ import shortestpath.TestShortestPathConfig;
 import shortestpath.WorldPointUtil;
 import shortestpath.items.*;
 import shortestpath.pathfinder.astar.RoutingStatic;
-import shortestpath.presentation.PathAnnotatorTestServices;
+import shortestpath.presentation.*;
 import shortestpath.requirement.Capability;
 import shortestpath.requirement.model.SkillLevels;
 import shortestpath.settings.TeleportationItem;
@@ -151,8 +152,11 @@ public class UnlockSuggestionsTest
 		ItemComposition coins = mock(ItemComposition.class);
 		when(coins.getName()).thenReturn("Coins");
 		when(client.getItemDefinition(ItemID.COINS)).thenReturn(coins);
-		assertEquals("Bring 20 Coins from your bank to use: Ship Aldarin",
-			PathAnnotatorTestServices.forTesting(client, null, null).getUnlockSuggestionText(search));
+		PathAnnotator annotator = PathAnnotatorTestServices.forTesting(client, null, null);
+		String text = annotator.getUnlockSuggestionText(search);
+		assertEquals("Bring 20 Coins from your bank to use: Ship Aldarin", text);
+		// Built once, not every frame.
+		assertSame(text, annotator.getUnlockSuggestionText(search));
 	}
 
 	/** The Sunset Coast to Aldarin search with ships and quetzals only, running {@code completed} once it's done. */
