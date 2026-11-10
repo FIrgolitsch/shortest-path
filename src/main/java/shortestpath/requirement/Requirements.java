@@ -125,26 +125,13 @@ public final class Requirements
 
 	private Set<Quest> missingQuests(Transport transport)
 	{
-		Set<Quest> missing = new HashSet<>();
-		if (quest(transport) != RejectionReason.NONE)
-		{
-			for (Quest quest : transport.getQuests())
-			{
-				if (!completedQuests(List.of(quest)))
-				{
-					missing.add(quest);
-				}
-			}
-		}
+		Set<Quest> missing = new HashSet<>(transport.isQuestLocked() ? transport.getQuests() : Set.of());
+		missing.removeIf(quest -> completedQuests(List.of(quest)));
 		return missing;
 	}
 
 	private SkillLevels missingLevels(Transport transport)
 	{
-		if (skillLevel(transport) == RejectionReason.NONE)
-		{
-			return SkillLevels.NONE;
-		}
 		boolean skipTotalLevel = context.getLeagueModeSnapshot().isSeasonal();
 		int[] levels = new int[SkillLevels.LENGTH];
 		for (int i = 0; i < levels.length; i++)
