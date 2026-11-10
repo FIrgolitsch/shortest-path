@@ -311,10 +311,11 @@ public final class AStarPathfinder implements ActiveSearch
 	{ return forwardSearchNanos;
 	}
 
-	/** Empty until {@link #findUnlockSuggestions()} finds them, and for a cancelled search. */
+	/** Empty until {@link #findUnlockSuggestions()} confirms one, and for a cancelled search. */
 	@Override
-	public List<UnlockSuggestions.Suggestion> getUnlockSuggestions()
-	{ return cancelled ? List.of() : unlockSearch.getSuggestions();
+	public Optional<UnlockSuggestions.Suggestion> getUnlockSuggestion()
+	{ return cancelled || unlockSearch.getOutcome() != UnlockSuggestions.Outcome.CONFIRMED ? Optional.empty()
+		: Optional.of(unlockSearch.getExplanation());
 	}
 
 	/** How the last {@link #findUnlockSuggestions()} went: what it found and what it tried. */

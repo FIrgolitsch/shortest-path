@@ -105,12 +105,6 @@ public final class UnlockSuggestions
 			this.graphNanos = graphNanos;
 			this.rerunNanos = rerunNanos;
 		}
-
-		/** The explanation once the rerun confirmed it, else nothing. */
-		public List<Suggestion> getSuggestions()
-		{
-			return outcome == Outcome.CONFIRMED ? List.of(explanation) : List.of();
-		}
 	}
 
 	private final Requirements requirements;

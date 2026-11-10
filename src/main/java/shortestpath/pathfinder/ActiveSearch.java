@@ -61,16 +61,16 @@ public interface ActiveSearch extends Runnable
 
 	/**
 	 * For a finished search that found its target unreachable, what the player could unlock to
-	 * reach it, cheapest first, once {@link #findUnlockSuggestions()} has found them: a new list,
-	 * after {@link #isDone()}. Empty until then, once cancelled, and for backends that do not look.
+	 * reach it, once {@link #findUnlockSuggestions()} has confirmed it, after {@link #isDone()}.
+	 * Empty until then, once cancelled, and for backends that do not look.
 	 */
-	default List<UnlockSuggestions.Suggestion> getUnlockSuggestions()
+	default Optional<UnlockSuggestions.Suggestion> getUnlockSuggestion()
 	{
-		return List.of();
+		return Optional.empty();
 	}
 
 	/**
-	 * Run after {@link #run()} on the same thread: finds {@link #getUnlockSuggestions()} when the
+	 * Run after {@link #run()} on the same thread: finds {@link #getUnlockSuggestion()} when the
 	 * search found its target unreachable, taking up to a game tick. Does nothing by default.
 	 */
 	default void findUnlockSuggestions()

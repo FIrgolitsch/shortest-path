@@ -350,12 +350,11 @@ public class PathTileOverlay extends Overlay
 
 			if (renderState.isPathUnreachable() && settings.bool(ConfigKey.SHOW_UNREACHABLE_TEXT))
 			{
-				// Labels stack upward, so the dearest suggestion goes in first: read top-down, the
-				// unreachable text comes first and the cheapest suggestion right under it.
-				List<String> suggestions = annotator.getUnlockSuggestionLines(search);
-				for (int i = suggestions.size() - 1; i >= 0; i--)
+				// Labels stack upward: the suggestion goes in first to read under the unreachable text.
+				String suggestion = annotator.getUnlockSuggestionText(search);
+				if (suggestion != null)
 				{
-					playerTileLabelOffset += drawLabelOnPlayerTile(graphics, suggestions.get(i), playerTileLabelOffset);
+					playerTileLabelOffset += drawLabelOnPlayerTile(graphics, suggestion, playerTileLabelOffset);
 				}
 				playerTileLabelOffset += drawLabelOnPlayerTile(graphics, settings.get(ConfigKey.UNREACHABLE_TEXT), playerTileLabelOffset);
 			}

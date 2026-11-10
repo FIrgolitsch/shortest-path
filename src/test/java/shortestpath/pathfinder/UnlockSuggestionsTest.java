@@ -117,7 +117,7 @@ public class UnlockSuggestionsTest
 		AStarPathfinder search = search(SUNSET_COAST, ALDARIN);
 
 		assertFalse(search.getResult().isReached());
-		UnlockSuggestions.Suggestion first = search.getUnlockSuggestions().get(0);
+		UnlockSuggestions.Suggestion first = search.getUnlockSuggestion().get();
 		assertEquals(Capability.items(Map.of(ItemID.COINS, 20)), first.getCapability());
 		assertEquals(1, first.getTransports().size());
 		assertEquals(TransportType.SHIP, first.getTransports().get(0).getType());
@@ -146,13 +146,13 @@ public class UnlockSuggestionsTest
 
 		AStarPathfinder search = search(SUNSET_COAST, ALDARIN);
 
-		UnlockSuggestions.Suggestion first = search.getUnlockSuggestions().get(0);
+		UnlockSuggestions.Suggestion first = search.getUnlockSuggestion().get();
 		assertEquals(Capability.Effort.OWNED_ITEMS, first.getEffort());
 		ItemComposition coins = mock(ItemComposition.class);
 		when(coins.getName()).thenReturn("Coins");
 		when(client.getItemDefinition(ItemID.COINS)).thenReturn(coins);
 		assertEquals("Bring 20 Coins from your bank to use: Ship Aldarin",
-			PathAnnotatorTestServices.forTesting(client, null, null).getUnlockSuggestionLines(search).get(0));
+			PathAnnotatorTestServices.forTesting(client, null, null).getUnlockSuggestionText(search));
 	}
 
 	/** The Sunset Coast to Aldarin search with ships and quetzals only, running {@code completed} once it's done. */
@@ -174,14 +174,14 @@ public class UnlockSuggestionsTest
 		// So the unreachable text shows at once, and the search's own time is only the search.
 		boolean[] doneWithoutSuggestions = new boolean[1];
 		AStarPathfinder search = aldarinSearch(done -> doneWithoutSuggestions[0] = done.isDone()
-			&& !done.getResult().isReached() && done.getUnlockSuggestions().isEmpty());
+			&& !done.getResult().isReached() && done.getUnlockSuggestion().isEmpty());
 
 		search.run();
 
 		assertTrue("unreachable is out before the suggestions", doneWithoutSuggestions[0]);
 		assertEquals("run() didn't look", 0, search.getUnlockSearchNanos());
 		search.findUnlockSuggestions();
-		assertFalse(search.getUnlockSuggestions().isEmpty());
+		assertFalse(search.getUnlockSuggestion().isEmpty());
 	}
 
 	@Test
@@ -191,16 +191,16 @@ public class UnlockSuggestionsTest
 		AStarPathfinder replaced = aldarinSearch(AStarPathfinder::cancel);
 		replaced.run();
 		replaced.findUnlockSuggestions();
-		assertTrue(replaced.getUnlockSuggestions().isEmpty());
+		assertTrue(replaced.getUnlockSuggestion().isEmpty());
 		assertEquals(0, replaced.getUnlockSearchNanos());
 
 		// Cancelled after they're found: they're dropped.
 		AStarPathfinder later = aldarinSearch(done -> assertTrue(done.isDone()));
 		later.run();
 		later.findUnlockSuggestions();
-		assertFalse(later.getUnlockSuggestions().isEmpty());
+		assertFalse(later.getUnlockSuggestion().isEmpty());
 		later.cancel();
-		assertTrue(later.getUnlockSuggestions().isEmpty());
+		assertTrue(later.getUnlockSuggestion().isEmpty());
 	}
 
 	@Test
@@ -210,7 +210,7 @@ public class UnlockSuggestionsTest
 		config.set("useQuetzals", true);
 		setup(99);
 
-		UnlockSuggestions.Suggestion suggestion = search(SUNSET_COAST, ALDARIN).getUnlockSuggestions().get(0);
+		UnlockSuggestions.Suggestion suggestion = search(SUNSET_COAST, ALDARIN).getUnlockSuggestion().get();
 
 		assertEquals(Capability.quests(Set.of(Quest.TWILIGHTS_PROMISE)), suggestion.getCapability());
 		assertEquals(Capability.Effort.PROGRESS, suggestion.getEffort());
@@ -228,7 +228,7 @@ public class UnlockSuggestionsTest
 
 		assertFalse(search.getResult().isReached());
 		assertEquals(UnlockSuggestions.Outcome.CLOSED, search.getUnlockSearch().getOutcome());
-		assertTrue(search.getUnlockSuggestions().isEmpty());
+		assertTrue(search.getUnlockSuggestion().isEmpty());
 		assertEquals(0, search.getUnlockSearch().getRerunNanos());
 	}
 
@@ -246,7 +246,7 @@ public class UnlockSuggestionsTest
 		AStarPathfinder search = search(SUNSET_COAST, target);
 
 		assertFalse(search.getResult().isReached());
-		UnlockSuggestions.Suggestion suggestion = search.getUnlockSuggestions().get(0);
+		UnlockSuggestions.Suggestion suggestion = search.getUnlockSuggestion().get();
 		assertEquals(Capability.of(Set.of(Quest.DEATH_ON_THE_ISLE), SkillLevels.NONE, Map.of(ItemID.COINS, 20)),
 			suggestion.getCapability());
 		assertEquals(TransportType.SHIP, suggestion.getTransports().get(0).getType());
@@ -266,15 +266,12 @@ public class UnlockSuggestionsTest
 		AStarPathfinder search = search(LUMBRIDGE, target);
 
 		assertFalse(search.getResult().isReached());
-		List<UnlockSuggestions.Suggestion> suggestions = search.getUnlockSuggestions();
-		assertFalse(search.debugStats().toString(), suggestions.isEmpty());
-		assertEquals(Map.of(ItemID.BRONZE_AXE, 1, ItemID.MACHETTE, 1), suggestions.get(0).getCapability().getItems());
+		assertTrue(search.debugStats().toString(), search.getUnlockSuggestion().isPresent());
+		Capability capability = search.getUnlockSuggestion().get().getCapability();
+		assertEquals(Map.of(ItemID.BRONZE_AXE, 1, ItemID.MACHETTE, 1), capability.getItems());
 		int[] agility = new int[SkillLevels.LENGTH];
 		agility[Skill.AGILITY.ordinal()] = 79;
-		for (UnlockSuggestions.Suggestion suggestion : suggestions)
-		{
-			assertNotEquals(SkillLevels.of(agility), suggestion.getCapability().getSkillLevels());
-		}
+		assertNotEquals(SkillLevels.of(agility), capability.getSkillLevels());
 		when(client.getBoostedSkillLevel(Skill.AGILITY)).thenReturn(79);
 		pathfinderConfig.refresh();
 		assertTrue("79 Agility also gets there", search(LUMBRIDGE, target).getResult().isReached());
@@ -295,7 +292,7 @@ public class UnlockSuggestionsTest
 		AStarPathfinder search = search(WorldPointUtil.packWorldPoint(2700, 3246, 0), ALDARIN);
 
 		assertFalse(search.getResult().isReached());
-		UnlockSuggestions.Suggestion suggestion = search.getUnlockSuggestions().get(0);
+		UnlockSuggestions.Suggestion suggestion = search.getUnlockSuggestion().get();
 		assertEquals(Capability.items(Map.of(ItemID.COINS, 20)), suggestion.getCapability());
 		assertEquals(List.of(TransportType.SHIP),
 			suggestion.getTransports().stream().map(Transport::getType).collect(Collectors.toList()));
@@ -313,7 +310,7 @@ public class UnlockSuggestionsTest
 			AStarPathfinder search = search(LUMBRIDGE, target);
 
 			assertFalse(search.getResult().isReached());
-			assertFalse(search.getUnlockSuggestions().isEmpty());
+			assertFalse(search.getUnlockSuggestion().isEmpty());
 			// It stops itself at the budget.
 			assertTrue(search.debugStats().toString(), search.getUnlockSearchNanos() < UnlockSuggestions.BUDGET_NANOS);
 		}

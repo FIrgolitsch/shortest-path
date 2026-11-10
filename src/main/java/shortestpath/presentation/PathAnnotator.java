@@ -81,11 +81,9 @@ public class PathAnnotator
 	// The missing-items label of missingItemsSearch, built on the client thread when first drawn.
 	private ActiveSearch missingItemsSearch;
 	private String missingItemsText;
-	// The lines for unlockSource, the suggestions unlockSearch last published, built on the client
-	// thread when first drawn.
-	private ActiveSearch unlockSearch;
-	private List<UnlockSuggestions.Suggestion> unlockSource;
-	private List<String> unlockLines = List.of();
+	// The line for unlockSource, the suggestion last drawn, built on the client thread when first drawn.
+	private UnlockSuggestions.Suggestion unlockSource;
+	private String unlockText;
 
 	PathAnnotator(PohService pohService, ItemStateService itemState)
 	{
@@ -124,32 +122,25 @@ public class PathAnnotator
 	}
 
 	/**
-	 * One line per set of unlocks that would let an unreachable route reach its target, such as
-	 * "Carry 20 Coins to use: Ship Aldarin", "Bring 20 Coins from your bank to use: Ship Aldarin"
-	 * when they're in the bank, or "Complete Twilight's Promise and carry 20 Coins to use: Ship
-	 * Aldarin, Quetzal Tal Teklan"; empty when there are none. The suggestions arrive after
-	 * the search is done, so the lines are rebuilt, on the client thread, whenever the search
-	 * publishes a new list.
+	 * The unlocks that would let an unreachable route reach its target, such as "Carry 20 Coins to
+	 * use: Ship Aldarin", "Bring 20 Coins from your bank to use: Ship Aldarin" when they're in the
+	 * bank, or "Complete Twilight's Promise and carry 20 Coins to use: Ship Aldarin, Quetzal Tal
+	 * Teklan"; {@code null} when there are none. The suggestion arrives after the search is done,
+	 * so the line is built, on the client thread, once per suggestion.
 	 */
-	public List<String> getUnlockSuggestionLines(ActiveSearch search)
+	public String getUnlockSuggestionText(ActiveSearch search)
 	{
-		List<UnlockSuggestions.Suggestion> suggestions = search == null ? List.of() : search.getUnlockSuggestions();
-		if (search != unlockSearch || suggestions != unlockSource)
+		UnlockSuggestions.Suggestion suggestion = search == null ? null : search.getUnlockSuggestion().orElse(null);
+		if (suggestion != unlockSource)
 		{
-			unlockSearch = search;
-			unlockSource = suggestions;
-			List<String> lines = new ArrayList<>();
-			for (UnlockSuggestions.Suggestion suggestion : suggestions)
-			{
-				// Items already in the bank read as a reminder to bring them.
-				boolean inBank = suggestion.getEffort() == Capability.Effort.OWNED_ITEMS;
-				lines.add(suggestion.getCapability().describe(this::itemName, inBank) + " to use: "
-					+ suggestion.getTransports().stream().map(PathAnnotator::transportLabel).distinct()
-						.collect(Collectors.joining(", ")));
-			}
-			unlockLines = lines;
+			unlockSource = suggestion;
+			// Items already in the bank read as a reminder to bring them.
+			unlockText = suggestion == null ? null
+				: suggestion.getCapability().describe(this::itemName, suggestion.getEffort() == Capability.Effort.OWNED_ITEMS)
+					+ " to use: " + suggestion.getTransports().stream().map(PathAnnotator::transportLabel).distinct()
+						.collect(Collectors.joining(", "));
 		}
-		return unlockLines;
+		return unlockText;
 	}
 
 	/** "Ship Aldarin", "Quetzal Aldarin", "Open Gate" */
