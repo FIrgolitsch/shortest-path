@@ -54,7 +54,7 @@ public final class UnlockSuggestions
 	static final long BUDGET_NANOS = 600_000_000L;
 	/** A rerun stopped at the deadline takes a moment to return, so it is stopped this much early. */
 	private static final long WIND_DOWN_NANOS = 10_000_000L;
-	/** The heuristic weight of the rerun's second, greedier search. */
+	/** The least heuristic weight of the rerun, which only has to settle whether the target is reached. */
 	private static final double QUICK_WEIGHT = 3.0;
 
 	/** The unlocks that let the route reach the target, and the locked transports they open on the way. */
@@ -166,7 +166,7 @@ public final class UnlockSuggestions
 		}
 		Suggestion explanation = new Suggestion(unlocks, locked, requirements.effort(unlocks));
 		AStarForwardSearch.Result route = rerun(unlocks, stat, collision, targets, start, heuristicWeight, stop,
-			deadline, restrictions, goals);
+			restrictions, goals);
 		Outcome outcome = route == null || route.cancelled() ? stopped(cancelled)
 			: route.reached() ? Outcome.CONFIRMED : Outcome.REJECTED;
 		return new Found(outcome, explanation);
@@ -238,13 +238,14 @@ public final class UnlockSuggestions
 
 	/**
 	 * The search rerun with {@code capability} granted, or {@code null} when {@code stop} came first.
-	 * It only has to show the target can be reached: the plain search gets half the time left, and
-	 * one still going after that is usually a long way round, which a greedier search finds quickly.
-	 * A result still {@link AStarForwardSearch.Result#cancelled() cancelled} settled nothing in time.
+	 * It only has to settle whether the target can be reached, so it is greedy: a weighted search
+	 * still exhausts every reachable state before it reports the target unreachable, and finds some
+	 * way there sooner when there is one. A result still
+	 * {@link AStarForwardSearch.Result#cancelled() cancelled} settled nothing in time.
 	 */
 	private AStarForwardSearch.Result rerun(Capability capability, RoutingStatic stat, CollisionMap collision,
-		int[] targets, int start, double heuristicWeight, BooleanSupplier stop, long deadline,
-		SearchRestrictions restrictions, GoalStates goals)
+		int[] targets, int start, double heuristicWeight, BooleanSupplier stop, SearchRestrictions restrictions,
+		GoalStates goals)
 	{
 		PreparedRoutingAccount account = accountWith.apply(requirements.granting(capability));
 		if (stop.getAsBoolean())
@@ -256,16 +257,8 @@ public final class UnlockSuggestions
 		{
 			return null;
 		}
-		PreparedTarget prepared = PreparedTarget.prepare(granted, collision, targets);
-		long sliceEnd = System.nanoTime() + (deadline - System.nanoTime()) / 2;
-		AStarForwardSearch.Result route = prepared.search(start, () -> stop.getAsBoolean() || System.nanoTime() > sliceEnd,
-			heuristicWeight, restrictions, AStarForwardSearch.NO_PROGRESS, goals::accepts);
-		if (route.cancelled() && !stop.getAsBoolean())
-		{
-			route = prepared.search(start, stop, Math.max(heuristicWeight, QUICK_WEIGHT), restrictions,
-				AStarForwardSearch.NO_PROGRESS, goals::accepts);
-		}
-		return route;
+		return PreparedTarget.prepare(granted, collision, targets).search(start, stop,
+			Math.max(heuristicWeight, QUICK_WEIGHT), restrictions, AStarForwardSearch.NO_PROGRESS, goals::accepts);
 	}
 
 	/**
