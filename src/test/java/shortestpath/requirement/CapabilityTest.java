@@ -137,6 +137,24 @@ public class CapabilityTest
 	}
 
 	@Test
+	public void theMusicCapeAsksForEveryTrack()
+	{
+		// As for the Music cape teleport, whose row needs "Max Music".
+		int[] levels = new int[SkillLevels.LENGTH];
+		Arrays.fill(levels, 0, Skill.values().length, 1);
+		levels[SkillLevels.MUSIC_TRACKS_INDEX] = 300;
+		Requirements requirements = RequirementTestFixtures.requirements(RequirementTestFixtures.context()
+				.boostedSkillLevelsAndMore(levels).currentMaxMusicTracks(750).build(),
+			RequirementTestFixtures.policy(TeleportationItem.INVENTORY));
+		Transport cape = transport().skillLevels("Max Music").build();
+
+		Capability tracks = requirements.capabilities(cape).get(0);
+
+		assertEquals("Reach 750 music tracks", tracks.describe(id -> "?"));
+		assertEquals(Capability.Effort.MAJOR, requirements.effort(tracks));
+	}
+
+	@Test
 	public void plusNeedsEverythingEitherNeeds()
 	{
 		Capability fare = Capability.quests(Set.of(Quest.THE_FREMENNIK_TRIALS)).plus(Capability.items(Map.of(ItemID.COINS, 20)));

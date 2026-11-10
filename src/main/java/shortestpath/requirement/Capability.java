@@ -39,7 +39,7 @@ public final class Capability
 		PROGRESS,
 		/**
 		 * Long-term goals: levels a lot of experience away, maximum levels such as a max cape's, and
-		 * every quest point.
+		 * every quest point or music track.
 		 */
 		MAJOR
 	}
@@ -154,6 +154,7 @@ public final class Capability
 				names.add(i == SkillLevels.TOTAL_LEVEL_INDEX ? "total level " + level
 					: i == SkillLevels.COMBAT_LEVEL_INDEX ? "combat level " + level
 					: i == SkillLevels.QUEST_POINTS_INDEX ? level + " quest points"
+					: i == SkillLevels.MUSIC_TRACKS_INDEX ? level + " music tracks"
 					: level + " " + Skill.values()[i].getName());
 			}
 		}

@@ -222,6 +222,7 @@ final class RequirementTestFixtures
 		private long evaluationTimeMinutes;
 		private int[] boostedSkillLevelsAndMore = maxedSkills();
 		private int currentMaxQuestPoints = 300;
+		private int currentMaxMusicTracks = SkillLevels.MAX_LEVEL;
 		private Map<Quest, QuestState> questStates = Map.of();
 		private Map<Integer, Integer> varbitValues = Map.of();
 		private Map<Integer, Integer> varPlayerValues = Map.of();
@@ -248,6 +249,12 @@ final class RequirementTestFixtures
 		ContextBuilder currentMaxQuestPoints(int points)
 		{
 			currentMaxQuestPoints = points;
+			return this;
+		}
+
+		ContextBuilder currentMaxMusicTracks(int tracks)
+		{
+			currentMaxMusicTracks = tracks;
 			return this;
 		}
 
@@ -308,7 +315,7 @@ final class RequirementTestFixtures
 		RequirementContext build()
 		{
 			return new RequirementContext(evaluationTimeMinutes, boostedSkillLevelsAndMore,
-				currentMaxQuestPoints, SkillLevels.MAX_LEVEL, questStates, varbitValues, varPlayerValues, eligibility,
+				currentMaxQuestPoints, currentMaxMusicTracks, questStates, varbitValues, varPlayerValues, eligibility,
 				unlocks, respawnPrifddinas, onSailingBoat, leagueModeState, availableSpiritTrees);
 		}
 	}

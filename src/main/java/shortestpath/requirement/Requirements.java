@@ -180,10 +180,11 @@ public final class Requirements
 			{
 				continue;
 			}
-			if (i == SkillLevels.QUEST_POINTS_INDEX)
+			if (i == SkillLevels.QUEST_POINTS_INDEX || i == SkillLevels.MUSIC_TRACKS_INDEX)
 			{
-				units[(required >= context.getCurrentMaxQuestPoints() ? Capability.Effort.MAJOR
-					: Capability.Effort.PROGRESS).ordinal()]++;
+				int every = i == SkillLevels.QUEST_POINTS_INDEX ? context.getCurrentMaxQuestPoints()
+					: context.getCurrentMaxMusicTracks();
+				units[(required >= every ? Capability.Effort.MAJOR : Capability.Effort.PROGRESS).ordinal()]++;
 			}
 			else if (i == SkillLevels.TOTAL_LEVEL_INDEX || i == SkillLevels.COMBAT_LEVEL_INDEX)
 			{
